@@ -13,10 +13,5 @@ SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 
 # Context manager para obter uma sessão de banco de dados assíncrona
 async def get_db():
-    async with SessionLocal() as db:
-        try:
-            yield db
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            raise
+    async with SessionLocal() as session:
+        yield session
