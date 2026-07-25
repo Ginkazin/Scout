@@ -1,0 +1,22 @@
+# Virtual Environment
+.venv/
+venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# VSCode
+.vscode/
+
+# Alembic
+alembic/versions/*.py
+
+# Logs
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
