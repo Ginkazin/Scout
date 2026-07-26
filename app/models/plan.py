@@ -1,7 +1,10 @@
 from sqlalchemy import Boolean, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
-from app.models.subscription import Subscription
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.subscription import Subscription
 
 
 class Plan(BaseModel):

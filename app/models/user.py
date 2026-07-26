@@ -2,8 +2,11 @@ import enum
 from datetime import datetime
 from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.subscription import Subscription
+from typing import TYPE_CHECKING
 from app.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from app.models.subscription import Subscription
 
 
 class UserRole(str, enum.Enum):

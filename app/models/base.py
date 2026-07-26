@@ -12,10 +12,6 @@ class Base(DeclarativeBase):
 class BaseModel(Base):
     __abstract__ = True
 
-    @declared_attr.directive
-    def __tablename__(cls) -> str:
-            return cls.__name__.lower() + "s"
-
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
