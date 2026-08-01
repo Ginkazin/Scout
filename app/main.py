@@ -20,5 +20,5 @@ async def lifespan(app: FastAPI):
     # Executa ao encerrar a aplicação (cleanup, se precisar)
     await engine.dispose()
 
-
+# Inicializa a aplicação FastAPI com o lifespan configurado
 app = FastAPI(lifespan=lifespan)

@@ -1,7 +1,7 @@
 from pydantic import SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# classe de configuração para o projeto, utilizando pydantic-settings
+# Configurações da aplicação, carregadas a partir do arquivo .env
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -19,14 +19,18 @@ class Settings(BaseSettings):
     DB_PASSWORD: SecretStr
     DB_NAME: str
 
-    # gera a URL de conexão com o banco de dados PostgreSQL usando asyncpg
+    SECRET_KEY: SecretStr
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     @computed_field
     @property
     def DATABASE_URL(self) -> SecretStr:
         url = (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD.get_secret_value()}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-    )
+        )
         return SecretStr(url)
 
 
