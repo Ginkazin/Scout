@@ -2,3 +2,8 @@ from app.models.base import Base
 from app.models.user import User
 from app.models.plan import Plan
 from app.models.subscription import Subscription
+from app.models.customer import Customer
+from app.models.server import Server
+from app.models.agent import Agent
+from app.models.metric import Metric
+from app.models.alert import Alert

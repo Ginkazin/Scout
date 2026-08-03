@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.models.subscription import Subscription
 
-
+#class Plan representa a tabela de planos no banco de dados.
 class Plan(BaseModel):
     __tablename__ = "plans"
 
@@ -21,6 +21,7 @@ class Plan(BaseModel):
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    #Relacionamento com a tabela de assinaturas, permitindo acessar todas as assinaturas associadas a este plano.
     subscriptions: Mapped[list["Subscription"]] = relationship(
         back_populates="plan",
         lazy="selectin",

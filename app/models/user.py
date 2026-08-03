@@ -7,14 +7,15 @@ from app.models.base import BaseModel
 
 if TYPE_CHECKING:
     from app.models.subscription import Subscription
+    from app.models.customer import Customer
 
-
+#class UserRole define os diferentes papéis que um usuário pode ter no sistema.
 class UserRole(str, enum.Enum):
     OWNER = "OWNER"
     ADMIN = "ADMIN"
     MEMBER = "MEMBER"
 
-
+#class User representa a tabela de usuários no banco de dados.
 class User(BaseModel):
     __tablename__ = "users"
 
@@ -31,9 +32,16 @@ class User(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    #Relacionamento com a tabela de assinaturas, permitindo acessar a assinatura associada a este usuário.
     subscription: Mapped["Subscription"] = relationship(
         back_populates="user",
         uselist=False,
         lazy="selectin",
         cascade="all, delete-orphan",
     )
+    #Relacionamento com a tabela de clientes.
+    customers: Mapped[list["Customer"]] = relationship(
+    back_populates="user",
+    lazy="selectin",
+    )
+    
