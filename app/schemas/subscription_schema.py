@@ -4,7 +4,7 @@ from uuid import UUID
 from app.models.subscription import PaymentProvider, SubscriptionStatus
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
 
-
+# Schemas relacionados à assinatura, incluindo criação, atualização e resposta de dados da assinatura. Estes schemas são usados para validação de entrada e saída de dados na API.
 class SubscriptionCreate(BaseSchema):
     plan_id: UUID
     payment_provider: PaymentProvider | None = None
@@ -12,7 +12,7 @@ class SubscriptionCreate(BaseSchema):
     provider_subscription_id: str | None = None
     trial_ends_at: datetime | None = None
 
-
+# schemas relacionados à assinatura, incluindo criação, atualização e resposta de dados da assinatura. Estes schemas são usados para validação de entrada e saída de dados na API.
 class SubscriptionUpdate(BaseSchema):
     plan_id: UUID | None = None
     status: SubscriptionStatus | None = None
@@ -23,7 +23,7 @@ class SubscriptionUpdate(BaseSchema):
     renews_at: datetime | None = None
     canceled_at: datetime | None = None
 
-
+# Resposta de dados da assinatura.
 class SubscriptionResponse(BaseResponseSchema):
     user_id: UUID
     plan_id: UUID
