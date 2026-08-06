@@ -66,3 +66,5 @@ def decode_token(token: str) -> dict:
         settings.SECRET_KEY.get_secret_value(),
         algorithms=[settings.ALGORITHM],
     )
+
+DUMMY_PASSWORD_HASH = "$2b$12$hKpibUGHlT5WlO9hOopqVOznypJOHsV1bicvdQ7KSGx3sTWFyAvR2"
