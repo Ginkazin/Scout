@@ -25,7 +25,7 @@ class User(BaseModel):
 
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role"),
-        default=UserRole.OWNER,
+        default=UserRole.ADMIN,
         nullable=False,
     )
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
