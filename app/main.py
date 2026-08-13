@@ -16,7 +16,11 @@ async def lifespan(app: FastAPI):
         print(f"Erro ao conectar com o banco de dados: {e}")
         raise  # opcional: impede a aplicação de subir se o banco estiver inacessível
 
+    start_scheduler()  # Inicia o agendador de tarefas
+
     yield  # a aplicação roda normalmente aqui
+
+    stop_scheduler()  # Encerra o agendador de tarefas
 
     # Executa ao encerrar a aplicação (cleanup, se precisar)
     await engine.dispose()
