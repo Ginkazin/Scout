@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 from app.core.database import engine
+from app.core.scheduler import start_scheduler, stop_scheduler
 
 # Configuração do lifespan da aplicação FastAPI para gerenciar a conexão com o banco de dados
 @asynccontextmanager
