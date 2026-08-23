@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from app.core.database import engine
 from app.core.scheduler import start_scheduler, stop_scheduler
+from app.api.v1.router.auth_router import router as auth_router
 
 # Configuração do lifespan da aplicação FastAPI para gerenciar a conexão com o banco de dados
 @asynccontextmanager
@@ -27,3 +28,4 @@ async def lifespan(app: FastAPI):
 
 # Inicializa a aplicação FastAPI com o lifespan configurado
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)  # Adiciona o roteador de autenticação à aplicação
