@@ -55,4 +55,4 @@ class UserResponse(BaseResponseSchema):
     role: UserRole
     email_verified: bool
     is_active: bool
-    last_login_at: datetime | None      
+    last_login: datetime | None      
