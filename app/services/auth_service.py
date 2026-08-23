@@ -10,7 +10,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.subscription import Subscription
+from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.subscription_repository import SubscriptionRepository
@@ -59,6 +59,7 @@ class AuthService:
         subscription = Subscription(
             user_id=user.id,
             plan_id=default_plan.id,
+            status=SubscriptionStatus.ACTIVE,
         )
         await self.subscription_repository.create(subscription)
 
