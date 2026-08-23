@@ -20,7 +20,7 @@ DEFAULT_PLANS = [
         "max_customers": 5,
         "max_servers": 15,
         "max_users": 5,
-        "retention_days": 5,
+        "retention_days": 15,
     },
     {
         "name": "PRO",
@@ -28,7 +28,7 @@ DEFAULT_PLANS = [
         "max_customers": 20,
         "max_servers": 100,
         "max_users": 10,
-        "retention_days": 5,
+        "retention_days":30,
     },
 ]
 
