@@ -16,7 +16,7 @@ from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
+# Dependency para obter uma instância do AuthService com os repositórios necessários
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(
         user_repository=UserRepository(db),
@@ -24,7 +24,7 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
         subscription_repository=SubscriptionRepository(db),
     )
 
-
+# Endpoint para registro de usuário
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     data: UserCreate,
@@ -35,8 +35,9 @@ async def register(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))from e 
 
+# Endpoint para login do usuário
 @router.post("/login", response_model=TokenResponse)
 async def login(
     data: LoginRequest,
@@ -47,7 +48,7 @@ async def login(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
-
+# Endpoint para refresh do token de acesso
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(
     data: RefreshRequest,
@@ -57,4 +58,3 @@ async def refresh(
         return await auth_service.refresh(data.refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
-    
