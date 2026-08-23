@@ -8,7 +8,7 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.auth_schema import (
     AccessTokenResponse,
     LoginRequest,
-    RefreshRequest,
+    RefreshTokenRequest,
     TokenResponse,
 )
 from app.schemas.user_schema import UserCreate, UserResponse
@@ -51,7 +51,7 @@ async def login(
 # Endpoint para refresh do token de acesso
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(
-    data: RefreshRequest,
+    data: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
