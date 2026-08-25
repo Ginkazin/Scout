@@ -79,10 +79,10 @@ class AuthService:
         user.last_login = datetime.now(timezone.utc)
         await self.user_repository.db.flush()
 
-        return TokenResponse(
-            access_token=create_access_token(user.id),
-            refresh_token=create_refresh_token(user.id),
-        )
+        return{
+            "access_token": create_access_token(user.id),
+            "refresh_token": create_refresh_token(user.id),
+        }
 
     #refresh é responsável por validar um refresh token, verificar se o usuário ainda está ativo e retornar um novo access token.
     async def refresh(self, refresh_token: str) -> AccessTokenResponse:

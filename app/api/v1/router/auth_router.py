@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -8,7 +8,6 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.auth_schema import (
     AccessTokenResponse,
     LoginRequest,
-    RefreshTokenRequest,
     TokenResponse,
 )
 from app.schemas.user_schema import UserCreate, UserResponse
@@ -41,20 +40,48 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     data: LoginRequest,
+    reponse: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
-        return await auth_service.login(data.email, data.password)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+        tokens = await auth_service.login(str(data.email), data.password)
+        Response.set_cookie(
+            key="refresh_token",
+            value= tokens["refresh_token"],
+            httponly=True,
+            secure=False, #trocar para true quando tiver em produção
+            samesite="lax",
+            path="/auth",
+            max_age=60 * 60 * 24 * 7
+        )
 
+        return TokenResponse(
+            access_token=tokens["access_token"],
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc),) from exc
+    
 # Endpoint para refresh do token de acesso
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(
-    data: RefreshTokenRequest,
+    refresh_token: str | None = Cookie(default=None),
     auth_service: AuthService = Depends(get_auth_service),
 ):
+    if refresh_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token ausente",
+        )
     try:
-        return await auth_service.refresh(data.refresh_token)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+        return await auth_service.refresh(refresh_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+# Endpoint de logout
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response):
+    response.delete_cookie(
+        key="refresh_token",
+        path="/auth",
+    )

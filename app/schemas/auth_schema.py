@@ -9,7 +9,6 @@ class LoginRequest(BaseSchema):
 # Resposta da rota de login — token do do usuário.
 class TokenResponse(BaseSchema):
     access_token: str
-    refresh_token: str
     token_type: str = "Bearer"
 
 # Request da rota de refresh — apenas o refresh_token.
