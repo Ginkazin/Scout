@@ -2,7 +2,7 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -10,7 +10,7 @@ from app.core.security import decode_token
 from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+bearer_scheme = HTTPBearer()
 
 credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -20,19 +20,21 @@ credentials_exception = HTTPException(
 
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    token = credentials.credentials
+
     try:
         payload = decode_token(token)
         if payload.get("type") != "access":
             raise credentials_exception
         subject = payload.get("sub")
-        if not subject:
+        if subject is None:
             raise credentials_exception
         user_id = UUID(subject)
-    except (jwt.PyJWTError, ValueError, TypeError):
-        raise credentials_exception
+    except (jwt.PyJWTError, ValueError, TypeError) as exc:
+        raise credentials_exception from exc
 
     user_repository = UserRepository(db)
     user = await user_repository.get_by_id(user_id)
