@@ -8,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole
+from app.repositories.plan_repository import PlanRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
+from app.services.auth_service import AuthService
 
 bearer_scheme = HTTPBearer()
 
@@ -17,6 +20,14 @@ credentials_exception = HTTPException(
     detail="Não foi possível validar as credenciais",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+# Dependency para obter uma instância do AuthService com os repositórios necessários
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(
+        user_repository=UserRepository(db),
+        plan_repository=PlanRepository(db),
+        subscription_repository=SubscriptionRepository(db),
+    )
 
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
