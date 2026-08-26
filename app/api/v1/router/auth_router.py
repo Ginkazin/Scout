@@ -12,16 +12,9 @@ from app.schemas.auth_schema import (
 )
 from app.schemas.user_schema import UserCreate, UserResponse
 from app.services.auth_service import AuthService
+from app.api.dependencies import get_auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# Dependency para obter uma instância do AuthService com os repositórios necessários
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(
-        user_repository=UserRepository(db),
-        plan_repository=PlanRepository(db),
-        subscription_repository=SubscriptionRepository(db),
-    )
 
 # Endpoint para registro de usuário
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -40,12 +33,13 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     data: LoginRequest,
-    reponse: Response,
+    response: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
         tokens = await auth_service.login(str(data.email), data.password)
-        Response.set_cookie(
+
+        response.set_cookie(
             key="refresh_token",
             value= tokens["refresh_token"],
             httponly=True,

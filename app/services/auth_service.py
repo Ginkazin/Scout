@@ -66,7 +66,7 @@ class AuthService:
         return user
 
     #login é responsável por autenticar um usuário com email e senha, atualizando o último login e retornando tokens de acesso e refresh.
-    async def login(self, email: str, password: str) -> TokenResponse:
+    async def login(self, email: str, password: str) -> dict[str, str]:   
         email = email.strip().lower()
         user = await self.user_repository.get_by_email(email)
 
