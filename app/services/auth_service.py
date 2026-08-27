@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 import jwt
 from starlette.concurrency import run_in_threadpool
+from sqlalchemy.exc import IntegrityError
 from app.core.security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
@@ -45,23 +46,25 @@ class AuthService:
 
         password_hash = await run_in_threadpool(hash_password, data.password)
 
-        # Todo registro público nasce como ADMIN da própria conta/assinatura
-        # (gerencia Customers, Servers, Agents e pode convidar MEMBERS).
-        # OWNER é reservado para a equipe interna da plataforma Scout.
         user = User(
             name=data.name,
             email=email,
             password_hash=password_hash,
             role=UserRole.ADMIN,
         )
-        user = await self.user_repository.create(user)
+        try:
+            user = await self.user_repository.create(user)
 
-        subscription = Subscription(
-            user_id=user.id,
-            plan_id=default_plan.id,
-            status=SubscriptionStatus.ACTIVE,
-        )
-        await self.subscription_repository.create(subscription)
+            subscription = Subscription(
+                user_id=user.id,
+                plan_id=default_plan.id,
+                status=SubscriptionStatus.ACTIVE,
+            )
+
+            await self.subscription_repository.create(subscription)
+
+        except IntegrityError as exc:
+            raise ValueError("Email já cadastrado") from exc
 
         return user
 
