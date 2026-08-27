@@ -1,4 +1,5 @@
 from uuid import UUID
+from sqlalchemy.exc import IntegrityError
 from app.models.customer import Customer
 from app.models.user import User
 from app.repositories.customer_repository import CustomerRepository
@@ -30,7 +31,10 @@ class CustomerService:
             notes=data.notes,
         )
 
-        return await self.customer_repository.create(customer)
+        try:
+            return await self.customer_repository.create(customer)
+        except IntegrityError as exc:
+            raise ValueError("Já existe um cliente com esse nome") from exc
 
     async def get_by_id(
             self,
@@ -87,7 +91,10 @@ class CustomerService:
         for field, value in update_data.items():
             setattr(customer, field, value)
 
-        return await self.customer_repository.update(customer)
+        try:    
+            return await self.customer_repository.update(customer)
+        except IntegrityError as exc:
+            raise ValueError("Já existe um cliente com esse nome") from exc
 
     async def delete(
             self,

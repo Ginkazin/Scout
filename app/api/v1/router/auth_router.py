@@ -24,8 +24,8 @@ async def register(
 ):
     try:
         return await auth_service.register(data)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email já cadastrado") 
 
