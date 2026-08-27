@@ -4,7 +4,8 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.services.customer_service import CustomerService
+from app.repositories.customer_repository import CustomerRepository
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User, UserRole
@@ -67,3 +68,11 @@ def require_role(*allowed_roles: UserRole):
         return current_user
 
     return _check_role
+
+#
+def get_customer_service(
+        db: AsyncSession = Depends(get_db),
+) -> CustomerService:
+    return CustomerService(
+        customer_repository=CustomerRepository(db),
+    )
