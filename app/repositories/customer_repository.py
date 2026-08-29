@@ -36,7 +36,7 @@ class CustomerRepository(BaseRepository[Customer]):
             .limit(limit)
         )
 
-        return list(result.scalars().all)
+        return list(result.scalars().all())
 
     async def get_by_name_and_user_id(
             self,
