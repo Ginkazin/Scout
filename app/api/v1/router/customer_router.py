@@ -15,7 +15,7 @@ from app.api.dependencies import get_customer_service
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
-
+# Endpoint para criar um novo cliente.
 @router.post("",response_model=CustomerResponse, status_code=status.HTTP_201_CREATED,)
 async def create_customer(
     data: CustomerCreate,
@@ -33,7 +33,7 @@ async def create_customer(
             detail=str(exc),
         ) from exc
 
-
+# Endpoint para listar clientes do usuário atual com paginação.
 @router.get("", response_model=list[CustomerResponse],)
 async def list_customer(
     skip: int = Query(default=0, ge=0),
@@ -47,7 +47,7 @@ async def list_customer(
         limit=limit,
     )
 
-
+# Endpoint para obter um cliente pelo ID e pelo usuário atual.
 @router.get("/{customer_id}", response_model= CustomerResponse,)    
 async def get_customer(
     customer_id: UUID,
@@ -65,7 +65,7 @@ async def get_customer(
             detail="Cliente não encontrado",
         ) from exc
 
-
+# Endpoint para atualizar um cliente existente.
 @router.patch("/{customer_id}", response_model=CustomerResponse,)
 async def update_customer(
     customer_id: UUID,
@@ -93,7 +93,7 @@ async def update_customer(
             detail=message,
         ) from exc
 
-
+# Endpoint para deletar um cliente existente.
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT,)
 async def delete_customer(
     customer_id: UUID,

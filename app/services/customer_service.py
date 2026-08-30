@@ -5,10 +5,12 @@ from app.models.user import User
 from app.repositories.customer_repository import CustomerRepository
 from app.schemas.customer_schema import CustomerCreate, CustomerUpdate
 
+# Classe de serviço para gerenciar operações relacionadas a clientes.
 class CustomerService:
     def __init__(self, customer_repository: CustomerRepository):
         self.customer_repository = customer_repository
 
+# Método para criar um novo cliente.
     async def create(
             self,
             data: CustomerCreate,
@@ -36,10 +38,11 @@ class CustomerService:
         except IntegrityError as exc:
             raise ValueError("Já existe um cliente com esse nome") from exc
 
+# Método para obter um cliente pelo ID e pelo usuário atual.
     async def get_by_id(
             self,
-            customer_id=UUID,
-            current_user=User,
+            customer_id: UUID,
+            current_user: User,
     ) -> Customer:
         customer = await self.customer_repository.get_by_id_and_user_id(
             customer_id=customer_id,
@@ -51,6 +54,7 @@ class CustomerService:
 
         return customer
 
+# Método para listar clientes do usuário atual com paginação.
     async def list(
             self,
             current_user:User,
@@ -63,6 +67,7 @@ class CustomerService:
             limit=limit,
         )
 
+# Método para atualizar um cliente existente.
     async def update(
             self,
             customer_id:UUID,
@@ -96,6 +101,7 @@ class CustomerService:
         except IntegrityError as exc:
             raise ValueError("Já existe um cliente com esse nome") from exc
 
+# Método para deletar um cliente existente.
     async def delete(
             self,
             customer_id:UUID,

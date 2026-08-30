@@ -4,10 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.customer import Customer
 from app.repositories.base_repository import BaseRepository
 
+# Repositório para gerenciar operações relacionadas a clientes no banco de dados.
 class CustomerRepository(BaseRepository[Customer]):
     def __init__(self, db:AsyncSession):
         super().__init__(Customer, db)
 
+# Método para obter um cliente pelo ID e pelo usuário atual.
     async def get_by_id_and_user_id(
             self,
             customer_id: UUID,
@@ -22,6 +24,7 @@ class CustomerRepository(BaseRepository[Customer]):
 
         return result.scalar_one_or_none()
 
+#   Método para listar clientes do usuário atual com paginação.
     async def list_by_user_id(
             self,
             user_id: UUID,
@@ -38,6 +41,7 @@ class CustomerRepository(BaseRepository[Customer]):
 
         return list(result.scalars().all())
 
+# Método para obter um cliente pelo nome e pelo usuário atual.
     async def get_by_name_and_user_id(
             self,
             name: str,
@@ -52,6 +56,7 @@ class CustomerRepository(BaseRepository[Customer]):
 
         return result.scalar_one_or_none()
 
+# Método para verificar se um cliente com um nome específico existe para um usuário.
     async def name_exists_for_user(
             self,
             name: str,
