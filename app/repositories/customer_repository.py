@@ -1,5 +1,5 @@
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.customer import Customer
 from app.repositories.base_repository import BaseRepository
@@ -68,3 +68,9 @@ class CustomerRepository(BaseRepository[Customer]):
         )
 
         return customer is not None
+
+    async def count_by_user_id(self, user_id: UUID) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(Customer).where(Customer.user_id == user_id)
+        )
+        return result.scalar_one()

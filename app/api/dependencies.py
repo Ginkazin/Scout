@@ -69,10 +69,12 @@ def require_role(*allowed_roles: UserRole):
 
     return _check_role
 
-#
+# Dependency para obter uma instância do CustomerService com o repositório necessário
 def get_customer_service(
         db: AsyncSession = Depends(get_db),
 ) -> CustomerService:
     return CustomerService(
         customer_repository=CustomerRepository(db),
+        plan_repository=PlanRepository(db),
+        subscription_repository=SubscriptionRepository(db),
     )

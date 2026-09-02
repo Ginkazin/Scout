@@ -3,12 +3,33 @@ from sqlalchemy.exc import IntegrityError
 from app.models.customer import Customer
 from app.models.user import User
 from app.repositories.customer_repository import CustomerRepository
+from app.repositories.plan_repository import PlanRepository
+from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.customer_schema import CustomerCreate, CustomerUpdate
 
 # Classe de serviço para gerenciar operações relacionadas a clientes.
 class CustomerService:
-    def __init__(self, customer_repository: CustomerRepository):
+    def __init__(self, customer_repository: CustomerRepository, plan_repository: PlanRepository, subscription_repository: SubscriptionRepository):
         self.customer_repository = customer_repository
+        self.plan_repository = plan_repository
+        self.subscription_repository = subscription_repository
+
+# função privada para verificar se o usuário atual atingiu o limite de clientes permitido pelo seu plano.
+    async def _check_customer_limit(self, current_user: User) -> None:
+        subscription = await self.subscription_repository.get_by_user_id(current_user.id)
+        if subscription is None:
+            raise ValueError("Usuário sem assinatura ativa.")
+
+        plan = await self.plan_repository.get_by_id(subscription.plan_id)
+        if plan is None:
+            raise ValueError("Plano da assinatura não encontrado.")
+
+        current_count = await self.customer_repository.count_by_user_id(current_user.id)
+        if current_count >= plan.max_customers:
+            raise ValueError(
+                f"Limite de clientes do plano '{plan.name}' atingido. "
+                f"({plan.max_customers}). Faça upgrade para adicionar mais. "
+            )
 
 # Método para criar um novo cliente.
     async def create(
@@ -23,6 +44,8 @@ class CustomerService:
 
         if existing_customer is not None:
             raise ValueError("Já existe um cliente com esse nome")
+
+        await self._check_customer_limit(current_user)
 
         customer = Customer(
             user_id=current_user.id,
