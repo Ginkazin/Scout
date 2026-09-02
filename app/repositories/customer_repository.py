@@ -69,6 +69,7 @@ class CustomerRepository(BaseRepository[Customer]):
 
         return customer is not None
 
+# Método para contar o número de clientes associados a um usuário específico.
     async def count_by_user_id(self, user_id: UUID) -> int:
         result = await self.db.execute(
             select(func.count()).select_from(Customer).where(Customer.user_id == user_id)
