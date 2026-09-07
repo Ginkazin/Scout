@@ -2,6 +2,7 @@ from sqlalchemy import Boolean, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
 from typing import TYPE_CHECKING
+from decimal import Decimal
 
 if TYPE_CHECKING:
     from app.models.subscription import Subscription
@@ -11,7 +12,7 @@ class Plan(BaseModel):
     __tablename__ = "plans"
 
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0.00"),)
 
     max_customers: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     max_servers: Mapped[int] = mapped_column(Integer, nullable=False, default=3)

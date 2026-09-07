@@ -1,14 +1,14 @@
 import asyncio
 
 from sqlalchemy import select
-
+from decimal import Decimal
 from app.core.database import SessionLocal
 from app.models.plan import Plan
 
 DEFAULT_PLANS = [
     {
         "name": "FREE",
-        "price": 0,
+        "price": Decimal("0.00"),
         "max_customers": 1,
         "max_servers": 3,
         "max_users": 1,
@@ -16,7 +16,7 @@ DEFAULT_PLANS = [
     },
     {
         "name": "STARTER",
-        "price": 49.90,
+        "price": Decimal("49.90"),
         "max_customers": 5,
         "max_servers": 15,
         "max_users": 5,
@@ -24,7 +24,7 @@ DEFAULT_PLANS = [
     },
     {
         "name": "PRO",
-        "price": 129.90,
+        "price": Decimal("129.90"),
         "max_customers": 20,
         "max_servers": 100,
         "max_users": 10,
