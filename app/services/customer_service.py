@@ -6,6 +6,7 @@ from app.repositories.customer_repository import CustomerRepository
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.customer_schema import CustomerCreate, CustomerUpdate
+from app.core.exceptions import ConflictError, NotFoundError, PlanLimitExceededError
 
 # Classe de serviço para gerenciar operações relacionadas a clientes.
 class CustomerService:
@@ -18,17 +19,17 @@ class CustomerService:
     async def _check_customer_limit(self, current_user: User) -> None:
         subscription = await self.subscription_repository.get_by_user_id(current_user.id)
         if subscription is None:
-            raise ValueError("Usuário sem assinatura ativa.")
+            raise NotFoundError("Usuário sem assinatura ativa.")
 
         plan = await self.plan_repository.get_by_id(subscription.plan_id)
         if plan is None:
-            raise ValueError("Plano da assinatura não encontrado.")
+            raise NotFoundError("Plano da assinatura não encontrado.")
 
         current_count = await self.customer_repository.count_by_user_id(current_user.id)
         if current_count >= plan.max_customers:
-            raise ValueError(
-                f"Limite de clientes do plano '{plan.name}' atingido. "
-                f"({plan.max_customers}). Faça upgrade para adicionar mais. "
+            raise PlanLimitExceededError(
+                f"Limite de clientes do plano '{plan.name}' atingido "
+                f"(maximo de {plan.max_customers}). Faça upgrade para adicionar mais. "
             )
 
 # Método para criar um novo cliente.
@@ -43,7 +44,7 @@ class CustomerService:
         )
 
         if existing_customer is not None:
-            raise ValueError("Já existe um cliente com esse nome")
+            raise ConflictError("Já existe um cliente com esse nome")
 
         await self._check_customer_limit(current_user)
 
@@ -59,7 +60,7 @@ class CustomerService:
         try:
             return await self.customer_repository.create(customer)
         except IntegrityError as exc:
-            raise ValueError("Já existe um cliente com esse nome") from exc
+            raise ConflictError("Já existe um cliente com esse nome") from exc
 
 # Método para obter um cliente pelo ID e pelo usuário atual.
     async def get_by_id(
@@ -73,7 +74,7 @@ class CustomerService:
         )
 
         if customer is None:
-            raise ValueError("Cliente não encontrado")
+            raise NotFoundError("Cliente não encontrado")
 
         return customer
 
@@ -114,7 +115,7 @@ class CustomerService:
                 existing_customer is not None
                 and existing_customer.id != customer.id
             ):
-                raise ValueError("Já existe um cliente com esse nome")
+                raise ConflictError("Já existe um cliente com esse nome")
 
         for field, value in update_data.items():
             setattr(customer, field, value)
@@ -122,7 +123,7 @@ class CustomerService:
         try:    
             return await self.customer_repository.update(customer)
         except IntegrityError as exc:
-            raise ValueError("Já existe um cliente com esse nome") from exc
+            raise ConflictError("Já existe um cliente com esse nome") from exc
 
 # Método para deletar um cliente existente.
     async def delete(

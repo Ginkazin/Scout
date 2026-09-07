@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
+from sqlalchemy import exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from app.core.database import get_db
@@ -13,6 +14,7 @@ from app.schemas.auth_schema import (
 from app.schemas.user_schema import UserCreate, UserResponse
 from app.services.auth_service import AuthService
 from app.api.dependencies import get_auth_service
+from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,8 +26,10 @@ async def register(
 ):
     try:
         return await auth_service.register(data)
-    except ValueError as exc:
+    except ConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email já cadastrado") 
 
@@ -53,7 +57,7 @@ async def login(
             access_token=tokens["access_token"],
         )
 
-    except ValueError as exc:
+    except UnauthorizedError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc),) from exc
     
 # Endpoint para refresh do token de acesso

@@ -18,6 +18,7 @@ from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth_schema import AccessTokenResponse, TokenResponse
 from app.schemas.user_schema import UserCreate
+from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 
 DEFAULT_PLAN_NAME = "FREE"
 
@@ -38,11 +39,11 @@ class AuthService:
     async def register(self, data: UserCreate) -> User:
         email = str(data.email).strip().lower()
         if await self.user_repository.email_exists(email):
-            raise ValueError("Email já cadastrado")
+            raise ConflictError("Email já cadastrado")
 
         default_plan = await self.plan_repository.get_active_by_name(DEFAULT_PLAN_NAME)
         if default_plan is None:
-            raise RuntimeError(f"Plano padrão '{DEFAULT_PLAN_NAME}' não configurado")
+            raise NotFoundError(f"Plano padrão '{DEFAULT_PLAN_NAME}' não configurado")
 
         password_hash = await run_in_threadpool(hash_password, data.password)
 
@@ -64,7 +65,7 @@ class AuthService:
             await self.subscription_repository.create(subscription)
 
         except IntegrityError as exc:
-            raise ValueError("Email já cadastrado") from exc
+            raise ConflictError("Email já cadastrado") from exc
 
         return user
 
@@ -77,7 +78,7 @@ class AuthService:
         is_valid = await run_in_threadpool(verify_password, password, password_hash)
 
         if user is None or not is_valid or not user.is_active:
-            raise ValueError("Email ou senha inválidos")
+            raise UnauthorizedError("Email ou senha inválidos")
 
         user.last_login = datetime.now(timezone.utc)
         await self.user_repository.db.flush()
@@ -92,16 +93,16 @@ class AuthService:
         try:
             payload = decode_token(refresh_token)
             if payload.get("type") != "refresh":
-                raise ValueError("Token inválido")
+                raise UnauthorizedError("Token inválido")
             subject = payload.get("sub")
             if not subject:
-                raise ValueError("Token inválido")
+                raise UnauthorizedError("Token inválido")
             user_id = UUID(subject)
         except (jwt.PyJWTError, ValueError, TypeError):
-            raise ValueError("Token inválido ou expirado")
+            raise UnauthorizedError("Token inválido ou expirado")
 
         user = await self.user_repository.get_by_id(user_id)
         if user is None or not user.is_active:
-            raise ValueError("Usuário não encontrado ou inativo")
+            raise UnauthorizedError("Usuário não encontrado ou inativo")
 
         return AccessTokenResponse(access_token=create_access_token(user.id))

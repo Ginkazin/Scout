@@ -2,7 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.api.dependencies import get_current_user
 from app.models.user import User
-from app.repositories.customer_repository import CustomerRepository
+from app.core.exceptions import ConflictError, NotFoundError, PlanLimitExceededError
 from app.schemas.customer_schema import (
     CustomerCreate,
     CustomerResponse,
@@ -25,11 +25,10 @@ async def create_customer(
             data=data,
             current_user=current_user,
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail=str(exc),) from exc
+    except PlanLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail=str(exc),) from exc
 
 # Endpoint para listar clientes do usuário atual com paginação.
 @router.get("", response_model=list[CustomerResponse],)
@@ -57,11 +56,8 @@ async def get_customer(
             customer_id=customer_id,
             current_user=current_user,
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente não encontrado",
-        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Cliente não encontrado",) from exc
 
 # Endpoint para atualizar um cliente existente.
 @router.patch("/{customer_id}", response_model=CustomerResponse,)
@@ -77,19 +73,10 @@ async def update_customer(
             data= data,
             current_user=current_user,
         )
-    except ValueError as exc:
-        message = str(exc)
-
-        if message == "Cliente não encontrado":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente não encontrado",
-            ) from exc
-
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=message,
-        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Cliente não encontrado",) from exc
+    except ConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail=str(exc),) from exc
 
 # Endpoint para deletar um cliente existente.
 @router.delete("/{customer_id}", status_code=status.HTTP_204_NO_CONTENT,)
@@ -103,8 +90,5 @@ async def delete_customer(
             customer_id=customer_id,
             current_user=current_user
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente não encontrado",
-        ) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Cliente não encontrado",) from exc
