@@ -1,11 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
-from sqlalchemy import exc
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from app.core.database import get_db
-from app.repositories.plan_repository import PlanRepository
-from app.repositories.subscription_repository import SubscriptionRepository
-from app.repositories.user_repository import UserRepository
 from app.schemas.auth_schema import (
     AccessTokenResponse,
     LoginRequest,
@@ -73,7 +67,7 @@ async def refresh(
         )
     try:
         return await auth_service.refresh(refresh_token)
-    except ValueError as exc:
+    except UnauthorizedError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
 # Endpoint de logout
