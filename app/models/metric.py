@@ -15,10 +15,11 @@ class Metric(BaseModel):
         CheckConstraint("cpu_usage >= 0 AND cpu_usage <= 100", name="ck_metrics_cpu_range"),
         CheckConstraint("memory_usage >= 0 AND memory_usage <= 100", name="ck_metrics_memory_range"),
         CheckConstraint("disk_usage >= 0 AND disk_usage <= 100", name="ck_metrics_disk_range"),
-        CheckConstraint(
-            "response_time_ms IS NULL OR response_time_ms >= 0",
-            name="ck_metrics_response_time_positive",
-        ),
+        CheckConstraint("response_time_ms IS NULL OR response_time_ms >= 0",name="ck_metrics_response_time_positive"),
+        CheckConstraint("uptime_seconds >= 0", name="ck_metrics_uptime_positive"),
+        CheckConstraint("network_in_bytes >= 0", name="ck_metrics_network_in_positive"),
+        CheckConstraint("network_out_bytes >= 0", name="ck_metrics_network_out_positive"),
+        CheckConstraint("process_count >= 0", name="ck_metrics_process_count_positive"),
     )
 
     server_id: Mapped[uuid.UUID] = mapped_column(
