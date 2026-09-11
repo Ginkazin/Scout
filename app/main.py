@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI
 from sqlalchemy import text
+from app.api.v1.router.server_router import router as server_router
 from app.api.v1.router.auth_router import router as auth_router
 from app.api.v1.router.customer_router import router as customer_router
 from app.core.database import engine
@@ -45,3 +46,4 @@ app = FastAPI(lifespan=lifespan)
 # Inclusão dos routers da aplicação
 app.include_router(auth_router)
 app.include_router(customer_router)
+app.include_router(server_router)
