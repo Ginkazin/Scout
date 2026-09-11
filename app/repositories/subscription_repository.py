@@ -29,3 +29,12 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             select(func.count()).select_from(Subscription).where(Subscription.plan_id == plan_id)
         )
         return result.scalar_one()
+
+    # get_by_user_id_for_update busca uma assinatura específica com base no ID do usuário e bloqueia a linha para atualização, garantindo que nenhuma outra transação possa modificar essa assinatura até que a transação atual seja concluída.
+    async def get_by_user_id_for_update(self, user_id: UUID) -> Subscription | None:
+        result = await self.db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()

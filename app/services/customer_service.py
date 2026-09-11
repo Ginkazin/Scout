@@ -15,9 +15,9 @@ class CustomerService:
         self.plan_repository = plan_repository
         self.subscription_repository = subscription_repository
 
-# função privada para verificar se o usuário atual atingiu o limite de clientes permitido pelo seu plano.
+    # função privada para verificar se o usuário atual atingiu o limite de clientes permitido pelo seu plano.
     async def _check_customer_limit(self, current_user: User) -> None:
-        subscription = await self.subscription_repository.get_by_user_id(current_user.id)
+        subscription = await self.subscription_repository.get_by_user_id_for_update(current_user.id)
         if subscription is None:
             raise NotFoundError("Usuário sem assinatura ativa.")
 
@@ -32,7 +32,7 @@ class CustomerService:
                 f"(maximo de {plan.max_customers}). Faça upgrade para adicionar mais. "
             )
 
-# Método para criar um novo cliente.
+    # Método para criar um novo cliente.
     async def create(
             self,
             data: CustomerCreate,
@@ -62,7 +62,7 @@ class CustomerService:
         except IntegrityError as exc:
             raise ConflictError("Já existe um cliente com esse nome") from exc
 
-# Método para obter um cliente pelo ID e pelo usuário atual.
+    # Método para obter um cliente pelo ID e pelo usuário atual.
     async def get_by_id(
             self,
             customer_id: UUID,
@@ -78,7 +78,7 @@ class CustomerService:
 
         return customer
 
-# Método para listar clientes do usuário atual com paginação.
+    # Método para listar clientes do usuário atual com paginação.
     async def list(
             self,
             current_user:User,
@@ -91,7 +91,7 @@ class CustomerService:
             limit=limit,
         )
 
-# Método para atualizar um cliente existente.
+    # Método para atualizar um cliente existente.
     async def update(
             self,
             customer_id:UUID,
@@ -125,7 +125,7 @@ class CustomerService:
         except IntegrityError as exc:
             raise ConflictError("Já existe um cliente com esse nome") from exc
 
-# Método para deletar um cliente existente.
+    # Método para deletar um cliente existente.
     async def delete(
             self,
             customer_id:UUID,
