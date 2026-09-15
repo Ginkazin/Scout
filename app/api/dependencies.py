@@ -4,6 +4,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.repositories.server_repository import ServerRepository
 from app.services.customer_service import CustomerService
 from app.repositories.customer_repository import CustomerRepository
 from app.core.database import get_db
@@ -13,6 +14,7 @@ from app.repositories.plan_repository import PlanRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
+from app.services.server_service import ServerService
 
 bearer_scheme = HTTPBearer()
 
@@ -21,14 +23,6 @@ credentials_exception = HTTPException(
     detail="Não foi possível validar as credenciais",
     headers={"WWW-Authenticate": "Bearer"},
 )
-
-# Dependency para obter uma instância do AuthService com os repositórios necessários
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(
-        user_repository=UserRepository(db),
-        plan_repository=PlanRepository(db),
-        subscription_repository=SubscriptionRepository(db),
-    )
 
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
@@ -69,6 +63,14 @@ def require_role(*allowed_roles: UserRole):
 
     return _check_role
 
+# Dependency para obter uma instância do AuthService com os repositórios necessários
+def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+    return AuthService(
+        user_repository=UserRepository(db),
+        plan_repository=PlanRepository(db),
+        subscription_repository=SubscriptionRepository(db),
+    )
+
 # Dependency para obter uma instância do CustomerService com o repositório necessário
 def get_customer_service(
         db: AsyncSession = Depends(get_db),
@@ -77,4 +79,13 @@ def get_customer_service(
         customer_repository=CustomerRepository(db),
         plan_repository=PlanRepository(db),
         subscription_repository=SubscriptionRepository(db),
+    )
+
+# Dependency para obter uma instância do ServerService com os repositórios necessários    
+def get_server_service(db: AsyncSession = Depends(get_db)) -> ServerService:
+    return ServerService(
+        server_repository=ServerRepository(db),
+        customer_repository=CustomerRepository(db),
+        subscription_repository=SubscriptionRepository(db),
+        plan_repository=PlanRepository(db),
     )

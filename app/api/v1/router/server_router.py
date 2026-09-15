@@ -1,28 +1,14 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_user
-from app.core.database import get_db
+from app.api.dependencies import get_current_user, get_server_service
 from app.core.exceptions import ConflictError, NotFoundError, PlanLimitExceededError
 from app.models.user import User
-from app.repositories.customer_repository import CustomerRepository
-from app.repositories.plan_repository import PlanRepository
-from app.repositories.server_repository import ServerRepository
-from app.repositories.subscription_repository import SubscriptionRepository
 from app.schemas.server_schema import ServerCreate, ServerResponse, ServerUpdate
 from app.services.server_service import ServerService
 
 router = APIRouter(tags=["servers"])
 
-def get_server_service(db: AsyncSession = Depends(get_db)) -> ServerService:
-    return ServerService(
-        server_repository=ServerRepository(db),
-        customer_repository=CustomerRepository(db),
-        subscription_repository=SubscriptionRepository(db),
-        plan_repository=PlanRepository(db),
-    )
-
-
+# Endpoint para criar um novo servidor para um cliente específico.
 @router.post(
     "/customers/{customer_id}/servers",
     response_model=ServerResponse,
@@ -43,7 +29,7 @@ async def create_server(
     except PlanLimitExceededError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
-
+# Endpoint para listar servidores de um cliente específico com paginação.
 @router.get("/customers/{customer_id}/servers", response_model=list[ServerResponse])
 async def list_servers_by_customer(
     customer_id: UUID,
@@ -59,7 +45,7 @@ async def list_servers_by_customer(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-
+# Endpoint para obter um servidor específico pelo ID.
 @router.get("/{server_id}", response_model=ServerResponse)
 async def get_server(
     server_id: UUID,
@@ -71,7 +57,7 @@ async def get_server(
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-
+# Endpoint para atualizar um servidor específico pelo ID.
 @router.patch("/{server_id}", response_model=ServerResponse)
 async def update_server(
     server_id: UUID,
@@ -86,7 +72,7 @@ async def update_server(
     except ConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-
+# Endpoint para deletar um servidor específico pelo ID.
 @router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_server(
     server_id: UUID,
