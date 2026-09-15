@@ -43,6 +43,10 @@ async def lifespan(app: FastAPI):
 # Inicialização da aplicação FastAPI
 app = FastAPI(lifespan=lifespan)
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
 # Inclusão dos routers da aplicação
 app.include_router(auth_router)
 app.include_router(customer_router)
