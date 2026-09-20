@@ -33,5 +33,31 @@ class Settings(BaseSettings):
         )
         return SecretStr(url)
 
-
 settings = Settings()
+
+class TestSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env.test",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    DB_TEST_HOST: str
+    DB_TEST_PORT: int = 5432
+    DB_TEST_USER: str
+    DB_TEST_PASSWORD: SecretStr
+    DB_TEST_NAME: str
+    
+
+
+    @computed_field
+    @property
+    def DATABASE_URL_TEST(self) -> SecretStr:
+        url = (
+            f"postgresql+asyncpg://{self.DB_TEST_USER}:{self.DB_TEST_PASSWORD.get_secret_value()}"
+            f"@{self.DB_TEST_HOST}:{self.DB_TEST_PORT}/{self.DB_TEST_NAME}"
+        )
+        return SecretStr(url)
+
+test_settings = TestSettings()   
