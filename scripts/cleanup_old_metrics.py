@@ -24,7 +24,7 @@ async def cleanup_old_metrics() -> None:
     async with SessionLocal() as db:
         lock_acquired = await db.scalar(
             text(
-                "SELECT pg_try_advisory_lock(:lock_id)"
+                "SELECT pg_try_advisory_xact_lock(:lock_id)"
             ),
             {
                 "lock_id": METRIC_RETENTION_LOCK_ID,
@@ -96,17 +96,3 @@ async def cleanup_old_metrics() -> None:
                 "Erro durante limpeza de métricas antigas"
             )
             raise
-
-        finally:
-            await db.execute(
-                text(
-                    "SELECT pg_advisory_unlock(:lock_id)"
-                ),
-                {
-                    "lock_id": METRIC_RETENTION_LOCK_ID,
-                },
-            )
-
-            logger.debug(
-                "Advisory lock da limpeza de métricas liberado."
-            )
