@@ -24,6 +24,7 @@ def start_scheduler() -> None:
         trigger=CronTrigger(
             hour=3,
             minute=0,
+            timezone="America/Sao_Paulo"
         ),
         id="cleanup_old_metrics",
         replace_existing=True,
