@@ -46,7 +46,7 @@ async def list_servers_by_customer(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 # Endpoint para obter um servidor específico pelo ID.
-@router.get("/{server_id}", response_model=ServerResponse)
+@router.get("/servers/{server_id}", response_model=ServerResponse)
 async def get_server(
     server_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -58,7 +58,7 @@ async def get_server(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 # Endpoint para atualizar um servidor específico pelo ID.
-@router.patch("/{server_id}", response_model=ServerResponse)
+@router.patch("/servers/{server_id}", response_model=ServerResponse)
 async def update_server(
     server_id: UUID,
     data: ServerUpdate,
@@ -73,7 +73,7 @@ async def update_server(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 # Endpoint para deletar um servidor específico pelo ID.
-@router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_server(
     server_id: UUID,
     current_user: User = Depends(get_current_user),
