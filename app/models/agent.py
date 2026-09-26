@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 #class AgentStatus define os diferentes status que um agente pode ter no sistema.
 class AgentStatus(str, enum.Enum):
+    PENDING = "PENDING"
     OFFLINE = "OFFLINE"
     ONLINE = "ONLINE"
     DISABLED = "DISABLED"
@@ -36,7 +37,7 @@ class Agent(BaseModel):
     status: Mapped[AgentStatus] = mapped_column(
         Enum(AgentStatus, name="agent_status"),
         nullable=False,
-        default=AgentStatus.OFFLINE,
+        default=AgentStatus.PENDING,
     )
 
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
