@@ -151,3 +151,126 @@ async def test_register_password_strength(client, free_plan):
     assert "A senha deve conter pelo menos uma letra minúscula." in response4.json()["detail"][0]["msg"]
     assert "A senha deve conter pelo menos um caractere especial." in response5.json()["detail"][0]["msg"]
     assert response6.json()["name"] == "João Teste"
+
+async def test_login_user(client, db_session, free_plan):
+    register_payload = {
+        "name": "João Teste2",
+        "email": "joao2@teste.com",
+        "password": "Senha@123",
+    }
+
+    register_response = await client.post(
+        "/auth/register",
+        json=register_payload
+    )
+
+    assert register_response.status_code == 201
+
+    login_payload = {
+        "email": "joao2@teste.com",
+        "password": "Senha@123",
+    }
+
+    login_response = await client.post(
+        "/auth/login",
+        json=login_payload
+    )
+
+    assert login_response.status_code == 200
+
+    body = login_response.json()
+
+    assert "access_token" in body
+    assert body["access_token"] != ""
+    assert body["token_type"] == "Bearer"
+
+    assert "refresh_token" in login_response.cookies
+    refresh_token = login_response.cookies["refresh_token"]
+    assert refresh_token != ""
+
+async def test_login_user_password_incorrect(client, db_session, free_plan):
+    register_payload = {
+        "name": "João Teste3",
+        "email": "joao3@teste.com",
+        "password": "Senha@123",
+    }
+
+    register_response = await client.post(
+        "/auth/register",
+        json=register_payload
+    )
+
+    assert register_response.status_code == 201
+
+    login_payload = {
+        "email": "joao3@teste.com",
+        "password": "Senha@1234",  # Incorrect password
+    }
+
+    login_response = await client.post(
+        "/auth/login",
+        json=login_payload
+    )
+
+    assert login_response.status_code == 401
+    assert login_response.json()["detail"] == "Email ou senha inválidos"
+
+async def test_login_user_incorrect_email(client, db_session, free_plan):
+    register_payload = {
+        "name": "João Teste4",
+        "email": "joao4@teste.com",
+        "password": "Senha@123",
+    }
+
+    register_response = await client.post(
+        "/auth/register",
+        json=register_payload
+    )
+
+    assert register_response.status_code == 201
+
+    login_payload = {
+        "email": "joao5@teste.com",
+        "password": "Senha@123",
+    }
+
+    login_response = await client.post(
+        "/auth/login",
+        json=login_payload
+    )
+
+    assert login_response.status_code == 401
+    assert login_response.json()["detail"] == "Email ou senha inválidos"
+
+async def test_login_user_inactive(client, db_session, free_plan):
+    register_payload = {
+        "name": "João Teste5",
+        "email": "joao5@teste.com",
+        "password": "Senha@123",
+    }
+
+    register_response = await client.post(
+        "/auth/register",
+        json=register_payload
+    )
+
+    assert register_response.status_code == 201
+
+    user_id = register_response.json()["id"]
+
+    session = await db_session.get(User, user_id)
+    session.is_active = False
+    await db_session.commit()
+
+    login_payload = {
+        "email": "joao5@teste.com",
+        "password": "Senha@123",
+    }
+
+    login_response = await client.post(
+        "/auth/login",
+        json=login_payload
+    )
+
+    assert login_response.status_code == 401
+    assert login_response.json()["detail"] == "Email ou senha inválidos"
