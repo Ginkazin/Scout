@@ -1,7 +1,7 @@
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.agent import Agent
+from app.models.agent import Agent, AgentStatus
 from app.models.customer import Customer
 from app.models.server import Server
 from app.repositories.base_repository import BaseRepository
@@ -37,4 +37,40 @@ class AgentRepository(BaseRepository[Agent]):
             )
         )
 
+        return result.scalar_one_or_none()
+
+    # Método para registrar um heartbeat de um agente, atualizando seu status, versão e timestamp de última visualização.
+    async def record_heartbeat(
+        self,
+        agent_id: UUID,
+        token_hash: str,
+        version: str,
+    ) -> Agent | None:
+        statement = (
+            update(Agent)
+            .where(
+                Agent.id == agent_id,
+                Agent.token_hash == token_hash,
+                Agent.status.in_(
+                    (
+                        AgentStatus.PENDING,
+                        AgentStatus.ONLINE,
+                        AgentStatus.OFFLINE,
+                    )
+                ),
+            )
+            .values(
+                status=AgentStatus.ONLINE,
+                version=version,
+                last_seen_at=func.clock_timestamp(),
+                updated_at=func.clock_timestamp(),
+            )
+            .returning(Agent)
+            .execution_options(
+                synchronize_session="fetch",
+                populate_existing=True,
+            )
+        )
+
+        result = await self.db.execute(statement)
         return result.scalar_one_or_none()
