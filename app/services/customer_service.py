@@ -2,6 +2,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from app.models.customer import Customer
 from app.models.user import User
+from app.models.subscription import SubscriptionStatus
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.plan_repository import PlanRepository
 from app.repositories.subscription_repository import SubscriptionRepository
@@ -21,6 +22,9 @@ class CustomerService:
         if subscription is None:
             raise NotFoundError("Usuário sem assinatura ativa.")
 
+        if subscription.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL):
+            raise PlanLimitExceededError("Assinatura do usuário não está ativa." "Não é possível adicionar clientes.")
+        
         plan = await self.plan_repository.get_by_id(subscription.plan_id)
         if plan is None:
             raise NotFoundError("Plano da assinatura não encontrado.")
