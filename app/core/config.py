@@ -59,5 +59,4 @@ class TestSettings(BaseSettings):
             f"@{self.DB_TEST_HOST}:{self.DB_TEST_PORT}/{self.DB_TEST_NAME}"
         )
         return SecretStr(url)
-
-test_settings = TestSettings()   
+  

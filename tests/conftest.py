@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
-from app.core.config import test_settings
+from app.core.config import TestSettings
 from app.core.database import get_db
 from app.main import app
 from app.models.base import Base
@@ -20,6 +20,7 @@ from app.models.server import Server
 from app.models.subscription import Subscription
 from app.models.user import User
 
+test_settings = TestSettings()
 
 if test_settings.DB_TEST_NAME != "scout_test":
     raise RuntimeError(
