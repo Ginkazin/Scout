@@ -12,9 +12,6 @@ __pycache__/
 # VSCode
 .vscode/
 
-# Alembic
-alembic/versions/*.py
-
 # Logs
 *.log
 
