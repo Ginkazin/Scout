@@ -1,5 +1,5 @@
 import uuid
-from pydantic import Field, IPvAnyAddress
+from pydantic import Field, IPvAnyAddress, field_validator
 from app.models.server import ServerType
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
 
@@ -26,6 +26,13 @@ class ServerUpdate(BaseSchema):
     operating_system: str | None = Field(default=None, max_length=100)
     description: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = None
+
+    @field_validator("name", "is_active", "server_type")
+    @classmethod
+    def reject_null_required_fields(cls, value):
+        if value is None:
+            raise ValueError("Campo não pode ser nulo.")
+        return value
 
 # ServerResponse é uma classe para representar a resposta de um servidor, incluindo campos como customer_id, name, server_type, hostname, ip_address, operating_system, description e is_active.
 class ServerResponse(BaseResponseSchema):

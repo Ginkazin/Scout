@@ -1,4 +1,4 @@
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, field_validator
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
 
 #class CustomerBase é uma classe base para os schemas de cliente, fornecendo campos comuns como name, company, email, phone e notes.
@@ -21,6 +21,13 @@ class CustomerUpdate(BaseSchema):
     phone: str | None = Field(default=None, max_length=30)
     notes: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = None
+
+    @field_validator("name", "is_active")
+    @classmethod
+    def reject_null_required_fields(cls, value):
+        if value is None:
+            raise ValueError("Campo não pode ser nulo.")
+        return value
 
 #class CustomerResponse é uma classe para representar a resposta de um cliente, incluindo campos como name, company, email, phone, notes e is_active.
 class CustomerResponse(BaseResponseSchema):
