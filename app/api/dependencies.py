@@ -27,7 +27,7 @@ credentials_exception = HTTPException(
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     token = credentials.credentials
 
@@ -64,7 +64,7 @@ def require_role(*allowed_roles: UserRole):
     return _check_role
 
 # Dependency para obter uma instância do AuthService com os repositórios necessários
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+def get_auth_service(db: AsyncSession = Depends(get_db, scope="function")) -> AuthService:
     return AuthService(
         user_repository=UserRepository(db),
         plan_repository=PlanRepository(db),
@@ -73,7 +73,7 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 
 # Dependency para obter uma instância do CustomerService com o repositório necessário
 def get_customer_service(
-        db: AsyncSession = Depends(get_db),
+        db: AsyncSession = Depends(get_db, scope="function"),
 ) -> CustomerService:
     return CustomerService(
         customer_repository=CustomerRepository(db),
@@ -82,7 +82,7 @@ def get_customer_service(
     )
 
 # Dependency para obter uma instância do ServerService com os repositórios necessários    
-def get_server_service(db: AsyncSession = Depends(get_db)) -> ServerService:
+def get_server_service(db: AsyncSession = Depends(get_db, scope="function")) -> ServerService:
     return ServerService(
         server_repository=ServerRepository(db),
         customer_repository=CustomerRepository(db),
