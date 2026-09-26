@@ -17,7 +17,7 @@ target_metadata = Base.metadata
 
 # Injeta a URL do banco vinda do Settings (.env), em vez do alembic.ini
 config.set_main_option(
-    "sqlalchemy.url", settings.DATABASE_URL.get_secret_value()
+    "sqlalchemy.url", settings.DATABASE_URL.get_secret_value().replace("%", "%%")
 )
 
 
