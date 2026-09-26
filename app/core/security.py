@@ -4,10 +4,12 @@ import jwt
 from passlib.context import CryptContext
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bycrypt__truncation_error=True)
 
 # Função para validar a força da senha
 def validate_password_strength(password: str) -> str:
+    if len(password.encode('utf-8')) > 72:
+        raise ValueError("A senha não pode ter mais de 72 bytes em UTF-8.")
     if len(password) < 8:
         raise ValueError("A senha deve ter pelo menos 8 caracteres.")
     if not any(char.isdigit() for char in password):
@@ -26,6 +28,8 @@ def hash_password(password: str) -> str:
 
 # Verifica se a senha fornecida corresponde à senha armazenada (hash)
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if len(plain_password.encode('utf-8')) > 72:
+        return False  # Senha inválida, não pode ter mais de 72 bytes em UTF-8
     return pwd_context.verify(plain_password, hashed_password)
 
 # Funções para criação e decodificação de tokens JWT
