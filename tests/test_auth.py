@@ -274,3 +274,36 @@ async def test_login_user_inactive(client, db_session, free_plan):
 
     assert login_response.status_code == 401
     assert login_response.json()["detail"] == "Email ou senha inválidos"
+
+async def test_refresh_token(client, db_session, free_plan):
+    register_payload = {
+        "name": "João Teste6",
+        "email": "joao6@teste.com",
+        "password": "Senha@123",
+    }
+
+    register_response = await client.post(
+        "/auth/register",
+        json=register_payload
+    )
+
+    assert register_response.status_code == 201
+
+    login_payload = {
+        "email": "joao6@teste.com",
+        "password": "Senha@123",
+    }
+
+    login_response = await client.post(
+        "/auth/login",
+        json=login_payload
+    )
+
+    assert login_response.status_code == 200
+    assert "refresh_token" in login_response.cookies
+    assert login_response.cookies["refresh_token"] != ""
+
+    refresh_response = await client.post("/auth/refresh")
+
+    assert refresh_response.status_code == 200
+    assert "access_token" in refresh_response.json()
