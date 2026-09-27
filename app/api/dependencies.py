@@ -15,6 +15,8 @@ from app.repositories.subscription_repository import SubscriptionRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.server_service import ServerService
+from app.repositories.agent_repository import AgentRepository
+from app.services.agent_service import AgentService
 
 bearer_scheme = HTTPBearer()
 
@@ -23,6 +25,8 @@ credentials_exception = HTTPException(
     detail="Não foi possível validar as credenciais",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+agent_bearer_scheme = HTTPBearer(scheme_name="AgentToken", description="Token do agent no formato scout_<agent_id>_<secret>", auto_error=False)
 
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
@@ -63,6 +67,18 @@ def require_role(*allowed_roles: UserRole):
 
     return _check_role
 
+# Dependency para obter o token do agente a partir do cabeçalho Authorization
+def get_agent_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(agent_bearer_scheme),
+) -> str:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de agente ausente ou invalido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
+
 # Dependency para obter uma instância do AuthService com os repositórios necessários
 def get_auth_service(db: AsyncSession = Depends(get_db, scope="function")) -> AuthService:
     return AuthService(
@@ -88,4 +104,11 @@ def get_server_service(db: AsyncSession = Depends(get_db, scope="function")) -> 
         customer_repository=CustomerRepository(db),
         subscription_repository=SubscriptionRepository(db),
         plan_repository=PlanRepository(db),
+    )
+
+# Dependency para obter uma instância do AgentService com os repositórios necessários
+def get_agent_service(db: AsyncSession = Depends(get_db, scope="function")) -> AgentService:
+    return AgentService(
+        agent_repository=AgentRepository(db),
+        server_repository=ServerRepository(db),
     )
