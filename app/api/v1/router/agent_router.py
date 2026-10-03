@@ -149,3 +149,23 @@ async def agent_heartbeat(
             detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+
+@router.delete(
+    "/agents/{agent_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_agent(
+    agent_id: UUID,
+    current_user: User = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service),
+):
+    try:
+        await service.delete(
+            agent_id=agent_id,
+            current_user=current_user,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc

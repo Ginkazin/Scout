@@ -152,3 +152,12 @@ class AgentService:
             raise UnauthorizedError("Credenciais de agente inválidas")
 
         return updated_agent
+
+    async def delete(
+        self,
+        agent_id: UUID,
+        current_user: User,
+    ) -> None:
+        agent = await self.get_by_id(agent_id=agent_id, current_user=current_user)
+
+        await self.agent_repository.delete(agent)

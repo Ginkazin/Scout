@@ -26,7 +26,11 @@ credentials_exception = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-agent_bearer_scheme = HTTPBearer(scheme_name="AgentToken", description="Token do agent no formato scout_<agent_id>_<secret>", auto_error=False)
+agent_bearer_scheme = HTTPBearer(
+    scheme_name="AgentToken",
+    description="Token do agent no formato scout_<agent_id>.<secret>",
+    auto_error=False,
+)
 
 # Dependency para obter o usuário atual a partir do token de acesso
 async def get_current_user(
