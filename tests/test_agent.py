@@ -18,7 +18,9 @@ from app.core.agent_security import generate_agent_token, parse_agent_token, ver
 from app.core.exceptions import ConflictError, UnauthorizedError
 from app.core.security import DUMMY_PASSWORD_HASH, create_access_token
 from app.models.agent import Agent, AgentStatus
+from app.models.alert import Alert, AlertSeverity
 from app.models.customer import Customer
+from app.models.metric import Metric
 from app.models.server import Server
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
@@ -323,6 +325,104 @@ def test_verify_rejects_malformed_secret(secret):
     assert not verify_agent_secret(secret, "0" * 64)
 
 
+@pytest.mark.parametrize("state", list(AgentStatus))
+async def test_delete_owned_agent_from_any_state(
+    client, db_session, owner, created_agent, state
+):
+    agent, token = created_agent
+    agent.status = state
+    await db_session.flush()
+    agent_id = agent.id
+    response = await client.delete(f"/agents/{agent_id}", headers=owner[2])
+    assert response.status_code == 204, response.text
+    assert response.content == b""
+    assert await db_session.scalar(
+        select(func.count()).select_from(Agent).where(Agent.id == agent_id)
+    ) == 0
+    assert (await client.get(f"/agents/{agent_id}", headers=owner[2])).status_code == 404
+    assert (await heartbeat(client, token)).status_code == 401
+    assert (await client.delete(f"/agents/{agent_id}", headers=owner[2])).status_code == 404
+
+
+@pytest.mark.parametrize("foreign", [False, True], ids=["missing", "other-owner"])
+async def test_delete_unowned_agent_preserves_registration(
+    client, db_session, owner_factory, created_agent, foreign
+):
+    agent, token = created_agent
+    _, _, other_headers = await owner_factory()
+    target = agent.id if foreign else uuid4()
+    response = await client.delete(f"/agents/{target}", headers=other_headers)
+    assert response.status_code == 404
+    await db_session.refresh(agent)
+    assert agent.status == AgentStatus.PENDING
+    assert (await heartbeat(client, token)).status_code == 200
+
+
+@pytest.mark.parametrize("credential", ["missing", "agent-token"])
+async def test_delete_requires_user_jwt(client, db_session, created_agent, credential):
+    agent, token = created_agent
+    headers = {} if credential == "missing" else bearer(token)
+    response = await client.delete(f"/agents/{agent.id}", headers=headers)
+    assert response.status_code == 401
+    await db_session.refresh(agent)
+    assert agent.status == AgentStatus.PENDING
+
+
+async def test_delete_preserves_server_history_and_other_agent(
+    client, db_session, owner, owner_factory, created_agent
+):
+    agent, _ = created_agent
+    server = owner[1]
+    metric = Metric(
+        server_id=server.id, cpu_usage=10, memory_usage=20, disk_usage=30,
+        network_in_bytes=123, network_out_bytes=456, process_count=1,
+        uptime_seconds=100,
+    )
+    alert = Alert(
+        server_id=server.id, severity=AlertSeverity.WARNING,
+        metric_name="cpu_usage", metric_value=90, threshold=80, title="CPU elevada",
+    )
+    db_session.add_all([metric, alert])
+    await db_session.flush()
+    _, other_server, other_headers = await owner_factory()
+    other_response = await client.post(f"/servers/{other_server.id}/agent", headers=other_headers)
+    assert other_response.status_code == 201
+    other_id = UUID(other_response.json()["id"])
+
+    response = await client.delete(f"/agents/{agent.id}", headers=owner[2])
+    assert response.status_code == 204
+    # refresh consulta o banco, sem depender dos objetos ainda no identity map.
+    for record in (server, metric, alert):
+        await db_session.refresh(record)
+    assert server.customer_id is not None
+    assert metric.server_id == server.id and metric.network_in_bytes == 123
+    assert alert.server_id == server.id and alert.metric_value == 90
+    assert (await client.get(f"/agents/{other_id}", headers=other_headers)).status_code == 200
+    assert (await heartbeat(client, other_response.json()["token"])).status_code == 200
+
+
+async def test_recreate_agent_issues_new_credential_and_rejects_old_token(
+    client, db_session, owner, created_agent
+):
+    old_agent, old_token = created_agent
+    old_id, old_hash = old_agent.id, old_agent.token_hash
+    assert (await client.delete(f"/agents/{old_id}", headers=owner[2])).status_code == 204
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["id"] != str(old_id)
+    assert body["token"] != old_token
+    assert body["status"] == "PENDING"
+    assert body["last_seen_at"] is None
+    new_agent = await db_session.get(Agent, UUID(body["id"]))
+    assert new_agent.token_hash != old_hash
+    assert (await heartbeat(client, old_token)).status_code == 401
+    assert (await heartbeat(client, body["token"])).status_code == 200
+    assert await db_session.scalar(
+        select(func.count()).select_from(Agent).where(Agent.server_id == owner[1].id)
+    ) == 1
+
+
 @pytest_asyncio.fixture
 async def committed_server(db_session):
     """Dados visíveis entre conexões, separados das fixtures sem commit externo."""
@@ -384,7 +484,7 @@ async def test_concurrent_creation_allows_only_one_agent(committed_server):
         assert verify_agent_secret(parse_agent_token(winner[2])[1], agents[0].token_hash)
 
 
-@pytest.mark.parametrize("change", ["disable", "credential-change"])
+@pytest.mark.parametrize("change", ["disable", "credential-change", "delete"])
 async def test_heartbeat_rechecks_database_after_authentication(committed_server, change):
     engine, user_id, server_id = committed_server
     agent_id = uuid4()
@@ -415,6 +515,9 @@ async def test_heartbeat_rechecks_database_after_authentication(committed_server
             if change == "disable":
                 service = AgentService(AgentRepository(session), ServerRepository(session))
                 await service.disable(agent_id, await session.get(User, user_id))
+            elif change == "delete":
+                service = AgentService(AgentRepository(session), ServerRepository(session))
+                await service.delete(agent_id, await session.get(User, user_id))
             else:
                 await session.execute(update(Agent).where(Agent.id == agent_id)
                                       .values(token_hash=generate_agent_token(agent_id)[1]))
@@ -429,6 +532,9 @@ async def test_heartbeat_rechecks_database_after_authentication(committed_server
 
     async with AsyncSession(engine) as session:
         agent = await session.get(Agent, agent_id)
+        if change == "delete":
+            assert agent is None
+            return
         assert agent.status == (AgentStatus.DISABLED if change == "disable" else AgentStatus.PENDING)
         assert agent.last_seen_at is None
         assert agent.version == "1.0.0"
