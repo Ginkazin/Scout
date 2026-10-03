@@ -6,12 +6,13 @@ com limpeza explícita; os demais usam a transação isolada do conftest.
 
 import asyncio
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import DateTime, delete, func, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.agent_security import generate_agent_token, parse_agent_token, verify_agent_secret
@@ -25,6 +26,7 @@ from app.models.server import Server
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
 from app.repositories.agent_repository import AgentRepository
+import app.repositories.agent_repository as agent_repository_module
 from app.repositories.server_repository import ServerRepository
 from app.schemas.agent_schema import AgentHeartbeat
 from app.services.agent_service import AgentService
@@ -421,6 +423,141 @@ async def test_recreate_agent_issues_new_credential_and_rejects_old_token(
     assert await db_session.scalar(
         select(func.count()).select_from(Agent).where(Agent.server_id == owner[1].id)
     ) == 1
+
+
+@pytest_asyncio.fixture
+async def offline_reference_time(db_session, monkeypatch):
+    """Fixa só o relógio da consulta; o UPDATE continua executando no PostgreSQL.
+
+    Sem isso, duas queries distintas nunca compartilham exatamente o mesmo
+    statement_timestamp(), tornando o teste de igualdade sujeito à latência.
+    """
+    reference = await db_session.scalar(select(func.clock_timestamp()))
+    monkeypatch.setattr(
+        agent_repository_module,
+        "func",
+        SimpleNamespace(
+            statement_timestamp=lambda: literal(reference, type_=DateTime(timezone=True)),
+            clock_timestamp=func.clock_timestamp,
+        ),
+    )
+    return reference
+
+
+@pytest.mark.parametrize("timeout", [30, 180, 600])
+@pytest.mark.parametrize("offset_us,expected", [
+    (-1, AgentStatus.ONLINE),
+    (0, AgentStatus.ONLINE),
+    (1, AgentStatus.OFFLINE),
+], ids=["before-limit", "exact-limit", "after-limit"])
+async def test_offline_timeout_boundary(
+    db_session, created_agent, offline_reference_time, timeout, offset_us, expected
+):
+    agent, _ = created_agent
+    last_seen = offline_reference_time - timedelta(seconds=timeout, microseconds=offset_us)
+    agent.status = AgentStatus.ONLINE
+    agent.last_seen_at = last_seen
+    await db_session.flush()
+
+    changed = await AgentRepository(db_session).mark_stale_agents_offline(timeout)
+
+    assert changed == (1 if expected == AgentStatus.OFFLINE else 0)
+    await db_session.refresh(agent)
+    assert agent.status == expected
+    assert agent.last_seen_at == last_seen
+
+
+@pytest.mark.parametrize("state", [AgentStatus.PENDING, AgentStatus.DISABLED, AgentStatus.OFFLINE])
+async def test_offline_check_preserves_other_states(
+    db_session, created_agent, offline_reference_time, state
+):
+    agent, _ = created_agent
+    old = offline_reference_time - timedelta(days=1)
+    agent.status, agent.last_seen_at = state, old
+    await db_session.flush()
+    await db_session.refresh(agent)
+    previous_updated_at = agent.updated_at
+
+    assert await AgentRepository(db_session).mark_stale_agents_offline(180) == 0
+
+    await db_session.refresh(agent)
+    assert agent.status == state
+    assert agent.last_seen_at == old
+    assert agent.updated_at == previous_updated_at
+
+
+@pytest.mark.parametrize("state", list(AgentStatus))
+async def test_offline_check_ignores_missing_last_seen(
+    db_session, created_agent, offline_reference_time, state
+):
+    agent, _ = created_agent
+    agent.status, agent.last_seen_at = state, None
+    await db_session.flush()
+    assert await AgentRepository(db_session).mark_stale_agents_offline(180) == 0
+    await db_session.refresh(agent)
+    assert agent.status == state
+    assert agent.last_seen_at is None
+
+
+async def test_offline_check_is_idempotent_and_counts_only_changes(
+    client, db_session, owner_factory, created_agent, offline_reference_time
+):
+    stale, _ = created_agent
+    stale.status = AgentStatus.ONLINE
+    stale.last_seen_at = offline_reference_time - timedelta(seconds=181)
+    _, server, headers = await owner_factory()
+    response = await client.post(f"/servers/{server.id}/agent", headers=headers)
+    assert response.status_code == 201
+    recent = await db_session.get(Agent, UUID(response.json()["id"]))
+    recent.status = AgentStatus.ONLINE
+    recent.last_seen_at = offline_reference_time - timedelta(seconds=179)
+    await db_session.flush()
+    repository = AgentRepository(db_session)
+
+    assert await repository.mark_stale_agents_offline(180) == 1
+    assert await repository.mark_stale_agents_offline(180) == 0
+    await db_session.refresh(stale)
+    await db_session.refresh(recent)
+    assert stale.status == AgentStatus.OFFLINE
+    assert recent.status == AgentStatus.ONLINE
+
+
+async def test_heartbeat_recovers_after_offline_timeout(
+    client, db_session, created_agent, offline_reference_time
+):
+    agent, token = created_agent
+    old = offline_reference_time - timedelta(seconds=181)
+    agent.status, agent.last_seen_at = AgentStatus.ONLINE, old
+    await db_session.flush()
+    repository = AgentRepository(db_session)
+    assert await repository.mark_stale_agents_offline(180) == 1
+    await db_session.refresh(agent)
+    assert agent.status == AgentStatus.OFFLINE
+
+    response = await heartbeat(client, token)
+    assert response.status_code == 200, response.text
+    await db_session.refresh(agent)
+    assert agent.status == AgentStatus.ONLINE
+    assert agent.last_seen_at > old
+    assert await repository.mark_stale_agents_offline(180) == 0
+
+
+async def test_offline_repository_does_not_commit(
+    db_session, created_agent, offline_reference_time
+):
+    agent, _ = created_agent
+    agent.status = AgentStatus.ONLINE
+    agent.last_seen_at = offline_reference_time - timedelta(seconds=181)
+    await db_session.flush()
+    savepoint = await db_session.begin_nested()
+    try:
+        assert await AgentRepository(db_session).mark_stale_agents_offline(180) == 1
+        await db_session.refresh(agent)
+        assert agent.status == AgentStatus.OFFLINE
+    finally:
+        await savepoint.rollback()
+    await db_session.refresh(agent)
+    assert agent.status == AgentStatus.ONLINE
 
 
 @pytest_asyncio.fixture

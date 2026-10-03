@@ -1,4 +1,4 @@
-from pydantic import SecretStr, computed_field
+from pydantic import SecretStr, computed_field, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    AGENT_OFFLINE_TIMEOUT_SECONDS: int = Field(default=180, ge=1, description="Tempo em segundos para considerar um agente offline após o último heartbeat.")
+    AGENT_OFFLINE_CHECK_INTERVAL_SECONDS: int = Field(default=60, ge=1, description="Intervalo em segundos para verificar agentes offline.")
 
     @computed_field
     @property

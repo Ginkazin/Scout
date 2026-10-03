@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import timedelta
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Agent, AgentStatus
@@ -23,6 +24,26 @@ class AgentRepository(BaseRepository[Agent]):
         )
 
         return result.scalar_one_or_none()
+
+    # Método para marcar agentes que não enviaram heartbeat dentro do tempo limite como OFFLINE.
+    async def mark_stale_agents_offline(self, timeout_seconds: int) -> int:
+        cutoff_time = func.statement_timestamp() - timedelta(seconds=timeout_seconds)
+        statement = (
+            update(Agent)
+            .where(
+                Agent.last_seen_at < cutoff_time,
+                Agent.status == AgentStatus.ONLINE,
+                Agent.last_seen_at.is_not(None)
+            )
+            .values(
+                status=AgentStatus.OFFLINE,
+                updated_at=func.clock_timestamp(),
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        result = await self.db.execute(statement)
+        return result.rowcount
 
     # Método para obter um agente pelo ID e pelo usuário atual.
     async def get_by_id_and_user_id(

@@ -2,6 +2,8 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from scripts.cleanup_old_metrics import cleanup_old_metrics
+from app.core.config import settings
+from scripts.check_offline_agents import check_offline_agents
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,15 @@ async def _run_cleanup_job() -> None:
         await cleanup_old_metrics()
     except Exception:
         logger.exception("Erro ao executar limpeza de métricas antigas")
+
+# Executa a função de verificação de agentes offline, capturando e registrando qualquer exceção que ocorra durante a execução.
+async def _run_offline_check_job() -> None:
+    try:
+        await check_offline_agents()
+    except Exception:
+        logger.exception(
+            "Erro ao verificar agentes sem heartbeat"
+        )
 
 # Inicia o agendador de tarefas, adicionando um job para executar a limpeza de métricas antigas todos os dias às 03:00. Se o job já existir, ele será substituído. O agendador é iniciado e uma mensagem de log é registrada.
 def start_scheduler() -> None:
@@ -29,6 +40,16 @@ def start_scheduler() -> None:
         id="cleanup_old_metrics",
         replace_existing=True,
         misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        _run_offline_check_job,
+        trigger="interval",
+        seconds=settings.AGENT_OFFLINE_CHECK_INTERVAL_SECONDS,
+        id="check_offline_agents",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
 
     scheduler.start()
