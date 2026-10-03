@@ -28,7 +28,7 @@ from app.models.user import User, UserRole
 from app.repositories.agent_repository import AgentRepository
 import app.repositories.agent_repository as agent_repository_module
 from app.repositories.server_repository import ServerRepository
-from app.schemas.agent_schema import AgentHeartbeat
+from app.schemas.agent_schema import AgentCreate, AgentHeartbeat
 from app.services.agent_service import AgentService
 
 
@@ -57,7 +57,7 @@ async def owner(owner_factory):
 
 @pytest_asyncio.fixture
 async def created_agent(client, db_session, owner):
-    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 201, response.text
     body = response.json()
     agent = await db_session.get(Agent, UUID(body["id"]))
@@ -79,7 +79,7 @@ async def heartbeat(client, token, **payload):
 
 
 async def test_create_pending_agent_and_store_only_hash(client, db_session, owner):
-    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 201, response.text
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
@@ -98,7 +98,7 @@ async def test_create_pending_agent_and_store_only_hash(client, db_session, owne
 async def test_duplicate_creation_preserves_original_credential(client, db_session, owner, created_agent):
     agent, token = created_agent
     original_hash = agent.token_hash
-    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 409
     assert_no_secrets(response)
     await db_session.refresh(agent)
@@ -110,7 +110,7 @@ async def test_duplicate_creation_preserves_original_credential(client, db_sessi
 async def test_agents_receive_independent_tokens(client, owner, owner_factory, created_agent):
     agent, token = created_agent
     _, server, headers = await owner_factory()
-    response = await client.post(f"/servers/{server.id}/agent", headers=headers)
+    response = await client.post(f"/servers/{server.id}/agent", headers=headers, json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 201
     other_token = response.json()["token"]
     assert parse_agent_token(token)[1] != parse_agent_token(other_token)[1]
@@ -123,7 +123,7 @@ async def test_agents_receive_independent_tokens(client, owner, owner_factory, c
 async def test_create_requires_owned_server(client, db_session, owner, owner_factory, foreign):
     _, other_server, _ = await owner_factory()
     target = other_server.id if foreign else uuid4()
-    response = await client.post(f"/servers/{target}/agent", headers=owner[2])
+    response = await client.post(f"/servers/{target}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 404
     assert await db_session.scalar(select(func.count()).select_from(Agent)) == 0
 
@@ -162,7 +162,7 @@ async def test_heartbeat_from_allowed_states_updates_only_target(
     agent.status, agent.last_seen_at = state, old
     await db_session.flush()
     _, other_server, other_headers = await owner_factory()
-    other_response = await client.post(f"/servers/{other_server.id}/agent", headers=other_headers)
+    other_response = await client.post(f"/servers/{other_server.id}/agent", headers=other_headers, json={"agent_type": "INFRASTRUCTURE"})
     other = await db_session.get(Agent, UUID(other_response.json()["id"]))
     before = await db_session.scalar(select(func.clock_timestamp()))
     response = await heartbeat(client, token)
@@ -290,8 +290,92 @@ async def test_management_requires_user_jwt(client, owner, created_agent, operat
     if operation in ("disable", "enable"):
         path += f"/{operation}"
     response = await client.request("GET" if operation == "get" else "POST", path,
-                                    headers={} if credential == "missing" else bearer(token))
+                                    headers={} if credential == "missing" else bearer(token),
+                                    **({"json": {"agent_type": "INFRASTRUCTURE"}} if operation == "create" else {}))
     assert response.status_code == 401, response.text
+
+
+@pytest.mark.parametrize("agent_type", ["INFRASTRUCTURE", "DATABASE"])
+async def test_agent_type_is_persisted_and_preserved_through_lifecycle(
+    client, db_session, owner, agent_type
+):
+    response = await client.post(
+        f"/servers/{owner[1].id}/agent", headers=owner[2],
+        json={"agent_type": agent_type},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["agent_type"] == agent_type
+    agent = await db_session.get(Agent, UUID(body["id"]))
+    assert agent.agent_type.value == agent_type
+
+    fetched = await client.get(f"/agents/{agent.id}", headers=owner[2])
+    assert fetched.status_code == 200
+    assert fetched.json()["agent_type"] == agent_type
+    assert_no_secrets(fetched)
+    beat = await heartbeat(client, body["token"])
+    assert beat.status_code == 200, beat.text
+    assert beat.json()["agent_type"] == agent_type
+    assert beat.json()["status"] == "ONLINE"
+
+    # Tipo é configuração de criação, não uma informação que o heartbeat redefine.
+    injected = await heartbeat(
+        client, body["token"],
+        agent_type="DATABASE" if agent_type == "INFRASTRUCTURE" else "INFRASTRUCTURE",
+    )
+    assert injected.status_code == 422
+    for action, expected in (("disable", "DISABLED"), ("enable", "PENDING")):
+        response = await client.post(f"/agents/{agent.id}/{action}", headers=owner[2])
+        assert response.status_code == 200
+        assert response.json()["agent_type"] == agent_type
+        assert response.json()["status"] == expected
+    await db_session.refresh(agent)
+    assert agent.agent_type.value == agent_type
+
+
+@pytest.mark.parametrize("payload", [
+    {}, {"agent_type": None}, {"agent_type": "INVALID"},
+    {"agent_type": "INFRAESTRUTURE"}, {"agent_type": "infrastructure"},
+    {"agent_type": "DATABASE", "server_id": str(uuid4())},
+], ids=["missing", "null", "unknown", "misspelled", "lowercase", "server-injection"])
+async def test_create_agent_rejects_invalid_type_payload(client, db_session, owner, payload):
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2], json=payload)
+    assert response.status_code == 422, response.text
+    assert await db_session.scalar(
+        select(func.count()).select_from(Agent).where(Agent.server_id == owner[1].id)
+    ) == 0
+
+
+async def test_create_agent_requires_body(client, db_session, owner):
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    assert response.status_code == 422
+    assert await db_session.scalar(select(func.count()).select_from(Agent)) == 0
+
+
+async def test_agent_types_on_separate_servers_are_independent(client, db_session, owner):
+    user, first_server, headers = owner
+    second_server = Server(customer_id=first_server.customer_id, name="Servidor banco")
+    db_session.add(second_server)
+    await db_session.flush()
+    agents = []
+    for server, agent_type in ((first_server, "INFRASTRUCTURE"), (second_server, "DATABASE")):
+        response = await client.post(
+            f"/servers/{server.id}/agent", headers=headers, json={"agent_type": agent_type}
+        )
+        assert response.status_code == 201, response.text
+        agents.append(response.json())
+    assert agents[0]["id"] != agents[1]["id"]
+    assert agents[0]["token"] != agents[1]["token"]
+    assert (await heartbeat(client, agents[0]["token"])).status_code == 200
+    untouched = await client.get(f"/agents/{agents[1]['id']}", headers=headers)
+    assert untouched.json()["status"] == "PENDING"
+    assert (await heartbeat(client, agents[1]["token"])).status_code == 200
+
+    duplicate = await client.post(
+        f"/servers/{first_server.id}/agent", headers=headers, json={"agent_type": "DATABASE"}
+    )
+    assert duplicate.status_code == 409
+    assert await db_session.scalar(select(func.count()).select_from(Agent)) == 2
 
 
 def test_token_generation_roundtrip_and_secret_hash():
@@ -387,7 +471,7 @@ async def test_delete_preserves_server_history_and_other_agent(
     db_session.add_all([metric, alert])
     await db_session.flush()
     _, other_server, other_headers = await owner_factory()
-    other_response = await client.post(f"/servers/{other_server.id}/agent", headers=other_headers)
+    other_response = await client.post(f"/servers/{other_server.id}/agent", headers=other_headers, json={"agent_type": "INFRASTRUCTURE"})
     assert other_response.status_code == 201
     other_id = UUID(other_response.json()["id"])
 
@@ -409,7 +493,7 @@ async def test_recreate_agent_issues_new_credential_and_rejects_old_token(
     old_agent, old_token = created_agent
     old_id, old_hash = old_agent.id, old_agent.token_hash
     assert (await client.delete(f"/agents/{old_id}", headers=owner[2])).status_code == 204
-    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2])
+    response = await client.post(f"/servers/{owner[1].id}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["id"] != str(old_id)
@@ -506,7 +590,7 @@ async def test_offline_check_is_idempotent_and_counts_only_changes(
     stale.status = AgentStatus.ONLINE
     stale.last_seen_at = offline_reference_time - timedelta(seconds=181)
     _, server, headers = await owner_factory()
-    response = await client.post(f"/servers/{server.id}/agent", headers=headers)
+    response = await client.post(f"/servers/{server.id}/agent", headers=headers, json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 201
     recent = await db_session.get(Agent, UUID(response.json()["id"]))
     recent.status = AgentStatus.ONLINE
@@ -604,7 +688,7 @@ async def test_concurrent_creation_allows_only_one_agent(committed_server):
             service = AgentService(BarrierRepository(session), ServerRepository(session))
             user = await session.get(User, user_id)
             try:
-                agent, token = await service.create(server_id, user)
+                agent, token = await service.create(server_id, user, AgentCreate(agent_type="INFRASTRUCTURE"))
                 await session.commit()
                 return "created", agent.id, token
             except ConflictError:

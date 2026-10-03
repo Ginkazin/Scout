@@ -35,6 +35,8 @@ class AgentService:
 
         if server is None:
             raise NotFoundError("Servidor não encontrado")
+        if data.os_family is None:
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor " "antes de criar o agente.")
 
         # Cada servidor pode possuir apenas um Agent.
         existing_agent = await self.agent_repository.get_by_server_id(

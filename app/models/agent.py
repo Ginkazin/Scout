@@ -17,7 +17,7 @@ class AgentStatus(str, enum.Enum):
     DISABLED = "DISABLED"
 
 class AgentType(str, enum.Enum):
-    INFRAESTRUTURE = "INFRAESTRUTURE"
+    INFRASTRUCTURE = "INFRASTRUCTURE"
     DATABASE = "DATABASE"
 
 #class Agent representa a tabela de agentes no banco de dados.
@@ -34,8 +34,8 @@ class Agent(BaseModel):
     agent_type: Mapped[AgentType] = mapped_column(
         Enum(AgentType, name="agent_type"),
         nullable=False,
-        default=AgentType.INFRAESTRUTURE,
-        server_default=AgentType.INFRAESTRUTURE.value,
+        default=AgentType.INFRASTRUCTURE,
+        server_default=AgentType.INFRASTRUCTURE.value,
     )
 
     # Hash do token usado pelo agente para autenticação.

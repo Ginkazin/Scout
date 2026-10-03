@@ -73,6 +73,7 @@ class ServerService:
             hostname=data.hostname,
             ip_address=str(data.ip_address) if data.ip_address is not None else None,
             operating_system=data.operating_system,
+            os_family=data.os_family,
             description=data.description,
         )
 

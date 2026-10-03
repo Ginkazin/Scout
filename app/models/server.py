@@ -21,6 +21,10 @@ class ServerType(str, enum.Enum):
     VM = "VM"
     OTHER = "OTHER"
 
+class ServerOSFamily(str, enum.Enum):
+    LINUX = "LINUX"
+    WINDOWS = "WINDOWS"
+
 #class Server representa a tabela de servidores no banco de dados.
 class Server(BaseModel):
     __tablename__ = "servers"
@@ -37,15 +41,12 @@ class Server(BaseModel):
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
 
-    server_type: Mapped[ServerType] = mapped_column(
-        Enum(ServerType, name="server_type"),
-        nullable=False,
-        default=ServerType.VPS,
-    )
+    server_type: Mapped[ServerType] = mapped_column(Enum(ServerType, name="server_type"),nullable=False,default=ServerType.VPS,)
 
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)  # IPv4 e IPv6
     operating_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    os_family: Mapped[ServerOSFamily | None] = mapped_column(Enum(ServerOSFamily, name="server_os_family"),nullable=True,)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
