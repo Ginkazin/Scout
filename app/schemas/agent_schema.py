@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from pydantic import Field
+from app.models.server import ServerOSFamily
 from app.models.agent import AgentStatus, AgentType
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
 
@@ -28,3 +29,9 @@ class AgentHeartbeat(BaseSchema):
 #class AgentCreateResponse é uma classe para representar a resposta de criação de um agente, herdando os campos da classe AgentResponse e adicionando o campo token.
 class AgentCreateResponse(AgentResponse):
     token: str
+
+class AgentRuntimeConfig(BaseSchema):
+    agent_id: uuid.UUID
+    server_id: uuid.UUID
+    agent_type: AgentType
+    server_os_family: ServerOSFamily

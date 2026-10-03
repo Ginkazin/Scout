@@ -8,7 +8,7 @@ from app.models.agent import Agent, AgentStatus
 from app.models.user import User
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.server_repository import ServerRepository
-from app.schemas.agent_schema import AgentHeartbeat, AgentCreate
+from app.schemas.agent_schema import AgentHeartbeat, AgentCreate, AgentRuntimeConfig
 
 
 class AgentService:
@@ -138,3 +138,21 @@ class AgentService:
         agent = await self.get_by_id(agent_id=agent_id, current_user=current_user) 
 
         await self.agent_repository.delete(agent)
+
+    # Método para obter a configuração de runtime de um agente, incluindo informações do servidor associado.
+    async def get_runtime_config(self,token: str,) -> AgentRuntimeConfig:
+        agent = await self.authenticate(token)
+
+        server = await self.server_repository.get_by_id(agent.server_id)
+
+        if server is None:
+            raise UnauthorizedError("Credenciais de agente inválidas")
+        if server.os_family is None:
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor " "antes de criar o agente.")
+
+        return AgentRuntimeConfig(
+            agent_id=agent.id,
+            server_id=server.id,
+            agent_type=agent.agent_type,
+            server_os_family=server.os_family,
+        )

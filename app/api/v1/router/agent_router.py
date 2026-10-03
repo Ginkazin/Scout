@@ -17,7 +17,8 @@ from app.schemas.agent_schema import (
     AgentCreateResponse,
     AgentHeartbeat,
     AgentResponse,
-    AgentCreate
+    AgentCreate,
+    AgentRuntimeConfig
 )
 from app.services.agent_service import AgentService
 
@@ -171,5 +172,30 @@ async def delete_agent(
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+@router.get(
+    "/agent/config",
+    response_model=AgentRuntimeConfig,
+)
+async def get_agent_config(
+    response: Response,
+    token: str = Depends(get_agent_token),
+    service: AgentService = Depends(get_agent_service),
+):
+    response.headers["Cache-Control"] = "no-store"
+
+    try:
+        return await service.get_runtime_config(token)
+    except UnauthorizedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    except ConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc

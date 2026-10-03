@@ -99,6 +99,7 @@ class ServerService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[Server]:
+        await self._get_owned_customer(customer_id, current_user)
         return await self.server_repository.list_by_customer_id_and_user_id(
             customer_id=customer_id,
             user_id=current_user.id,
