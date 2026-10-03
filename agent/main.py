@@ -1,14 +1,15 @@
+from http.client import HTTPException
 import json
 import logging
-import os
+import platform
 import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
 from urllib.request import (
     HTTPRedirectHandler,
     Request,
     build_opener,
 )
+from config import load_configuration
 
 
 AGENT_VERSION = "1.0.0"
@@ -22,45 +23,6 @@ class NoRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Não encaminha a credencial para outro endereço.
         return None
-
-
-def load_configuration() -> tuple[str, str]:
-    api_url = os.getenv("SCOUT_API_URL", "").strip().rstrip("/")
-    token = os.getenv("SCOUT_AGENT_TOKEN", "").strip()
-
-    if not api_url:
-        raise ValueError("Configure a variável SCOUT_API_URL.")
-
-    if not token:
-        raise ValueError("Configure a variável SCOUT_AGENT_TOKEN.")
-
-    parsed_url = urlsplit(api_url)
-
-    if (
-        not parsed_url.hostname
-        or parsed_url.username is not None
-        or parsed_url.password is not None
-        or parsed_url.query
-        or parsed_url.fragment
-    ):
-        raise ValueError("SCOUT_API_URL possui formato inválido.")
-
-    local_hosts = {"localhost", "127.0.0.1", "::1"}
-
-    if parsed_url.scheme != "https":
-        local_http = (
-            parsed_url.scheme == "http"
-            and parsed_url.hostname in local_hosts
-        )
-
-        if not local_http:
-            raise ValueError(
-                "Use HTTPS para conectar a uma API remota. "
-                "HTTP é permitido apenas nos testes locais."
-            )
-
-    return api_url, token
-
 
 def send_heartbeat(opener, api_url: str, token: str) -> bool:
     payload = json.dumps(
@@ -107,7 +69,7 @@ def send_heartbeat(opener, api_url: str, token: str) -> bool:
 
         return False
 
-    except (URLError, TimeoutError, OSError):
+    except (URLError, TimeoutError, OSError, HTTPException):
         logger.warning(
             "Não foi possível comunicar com a API. "
             "Uma nova tentativa será feita no próximo ciclo."
@@ -117,6 +79,93 @@ def send_heartbeat(opener, api_url: str, token: str) -> bool:
     logger.info("Heartbeat aceito pela API.")
     return True
 
+def fetch_runtime_config(
+    opener,
+    api_url: str,
+    token: str,
+) -> dict | None:
+    request = Request(
+        url=f"{api_url}/agent/config",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+
+    try:
+        with opener.open(
+            request,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        ) as response:
+            if response.status != 200:
+                logger.warning(
+                    "Resposta inesperada ao consultar configuração: HTTP %s.",
+                    response.status,
+                )
+                return None
+
+            max_response_bytes = 64 * 1024
+            body = response.read(max_response_bytes + 1)
+
+            if len(body) > max_response_bytes:
+                logger.error("Resposta de configuração excedeu o tamanho permitido.")
+                return None
+
+            configuration = json.loads(body.decode("utf-8"))
+
+    except HTTPError as exc:
+        try:
+            if exc.code == 401:
+                logger.warning(
+                    "Configuração recusada: confira o token "
+                    "e se o Agent está habilitado."
+                )
+            elif exc.code == 409:
+                logger.warning(
+                    "Configuração incompleta. Confira o cadastro "
+                    "do servidor no Scout."
+                )
+            else:
+                logger.warning(
+                    "Falha ao consultar configuração: HTTP %s.",
+                    exc.code,
+                )
+        finally:
+            exc.close()
+
+        return None
+
+    except (URLError, TimeoutError, OSError, HTTPException):
+        logger.warning(
+            "Não foi possível consultar a configuração. "
+            "Nova tentativa no próximo ciclo."
+        )
+        return None
+
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        logger.error("A API retornou uma configuração com formato inválido.")
+        return None
+
+    if not isinstance(configuration, dict):
+        logger.error("A configuração recebida deve ser um objeto JSON.")
+        return None
+
+    if configuration.get("agent_type") not in (
+        "INFRASTRUCTURE",
+        "DATABASE",
+    ):
+        logger.error("A API retornou um tipo de Agent não suportado.")
+        return None
+
+    if configuration.get("server_os_family") not in (
+        "WINDOWS",
+        "LINUX",
+    ):
+        logger.error("A API retornou um sistema operacional não suportado.")
+        return None
+
+    return configuration
 
 def main() -> int:
     logging.basicConfig(
@@ -130,19 +179,60 @@ def main() -> int:
         logger.error("%s", exc)
         return 1
 
+    local_os = platform.system().upper()
+
+    if local_os not in ("WINDOWS", "LINUX"):
+        logger.error(
+            "Sistema operacional não suportado: %s.",
+            local_os,
+        )
+        return 1
+
     opener = build_opener(NoRedirectHandler())
+    previous_configuration = None
 
     logger.info(
-        "Scout Agent %s iniciado. Intervalo de heartbeat: %s segundos.",
+        "Scout Agent %s iniciado em %s.",
         AGENT_VERSION,
-        HEARTBEAT_INTERVAL_SECONDS,
+        local_os,
     )
 
     try:
         while True:
             cycle_start = time.monotonic()
 
-            send_heartbeat(opener, api_url, token)
+            configuration = fetch_runtime_config(
+                opener,
+                api_url,
+                token,
+            )
+
+            if configuration is not None:
+                expected_os = configuration["server_os_family"]
+                agent_type = configuration["agent_type"]
+
+                if expected_os != local_os:
+                    logger.error(
+                        "Sistema incompatível: cadastro=%s, máquina=%s. "
+                        "Confira o token e o servidor selecionado no Scout.",
+                        expected_os,
+                        local_os,
+                    )
+                else:
+                    configuration_key = (
+                        agent_type,
+                        expected_os,
+                    )
+
+                    if configuration_key != previous_configuration:
+                        logger.info(
+                            "Configuração validada: tipo=%s, sistema=%s.",
+                            agent_type,
+                            expected_os,
+                        )
+                        previous_configuration = configuration_key
+
+                    send_heartbeat(opener, api_url, token)
 
             elapsed = time.monotonic() - cycle_start
             remaining = max(
@@ -155,7 +245,6 @@ def main() -> int:
     except KeyboardInterrupt:
         logger.info("Scout Agent encerrado.")
         return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
