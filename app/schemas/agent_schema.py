@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime
 from pydantic import Field
-from app.models.agent import AgentStatus
+from app.models.agent import AgentStatus, AgentType
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
 
 #class AgentCreate é uma classe para criar um novo agente, herdando os campos da classe BaseSchema.
 class AgentCreate(BaseSchema):
-    pass
+    agent_type: AgentType
 
 #class AgentUpdate é uma classe para atualizar informações de um agente, permitindo a modificação do campo auto_update.
 class AgentUpdate(BaseSchema):
@@ -15,6 +15,7 @@ class AgentUpdate(BaseSchema):
 #class AgentResponse é uma classe para representar a resposta de um agente, herdando os campos da classe BaseResponseSchema.
 class AgentResponse(BaseResponseSchema):
     server_id: uuid.UUID
+    agent_type: AgentType
     version: str
     status: AgentStatus
     last_seen_at: datetime | None

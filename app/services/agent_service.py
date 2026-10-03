@@ -8,7 +8,7 @@ from app.models.agent import Agent, AgentStatus
 from app.models.user import User
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.server_repository import ServerRepository
-from app.schemas.agent_schema import AgentHeartbeat
+from app.schemas.agent_schema import AgentHeartbeat, AgentCreate
 
 
 class AgentService:
@@ -25,6 +25,7 @@ class AgentService:
         self,
         server_id: UUID,
         current_user: User,
+        data:AgentCreate,
     ) -> tuple[Agent, str]:
         # Confirma que o servidor pertence ao usuário.
         server = await self.server_repository.get_by_id_and_user_id(
@@ -50,6 +51,7 @@ class AgentService:
         agent = Agent(
             id=agent_id,
             server_id=server.id,
+            agent_type=data.agent_type,
             token_hash=token_hash,
             status=AgentStatus.PENDING,
             auto_update=False,

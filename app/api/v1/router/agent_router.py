@@ -17,6 +17,7 @@ from app.schemas.agent_schema import (
     AgentCreateResponse,
     AgentHeartbeat,
     AgentResponse,
+    AgentCreate
 )
 from app.services.agent_service import AgentService
 
@@ -31,6 +32,7 @@ router = APIRouter(tags=["agents"])
 )
 async def create_agent(
     server_id: UUID,
+    data: AgentCreate,
     response: Response,
     current_user: User = Depends(get_current_user),
     service: AgentService = Depends(get_agent_service),
@@ -39,6 +41,7 @@ async def create_agent(
         agent, token = await service.create(
             server_id=server_id,
             current_user=current_user,
+            data=data,
         )
     except NotFoundError as exc:
         raise HTTPException(
