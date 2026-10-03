@@ -43,7 +43,7 @@ async def owner_factory(db_session, free_plan):
         customer = Customer(user_id=user.id, name="Empresa Agent")
         db_session.add(customer)
         await db_session.flush()
-        server = Server(customer_id=customer.id, name="Servidor Agent")
+        server = Server(os_family="LINUX", customer_id=customer.id, name="Servidor Agent")
         db_session.add(server)
         await db_session.flush()
         return user, server, {"Authorization": f"Bearer {create_access_token(user.id)}"}
@@ -126,6 +126,41 @@ async def test_create_requires_owned_server(client, db_session, owner, owner_fac
     response = await client.post(f"/servers/{target}/agent", headers=owner[2], json={"agent_type": "INFRASTRUCTURE"})
     assert response.status_code == 404
     assert await db_session.scalar(select(func.count()).select_from(Agent)) == 0
+
+
+@pytest.mark.parametrize("os_family", ["WINDOWS", "LINUX"])
+@pytest.mark.parametrize("agent_type", ["INFRASTRUCTURE", "DATABASE"])
+async def test_agent_creation_requires_classified_server(
+    client, db_session, owner, os_family, agent_type
+):
+    _, server, headers = owner
+    server.os_family = None
+    await db_session.flush()
+    path = f"/servers/{server.id}/agent"
+    payload = {"agent_type": agent_type}
+    rejected = await client.post(path, headers=headers, json=payload)
+    assert rejected.status_code == 409, rejected.text
+    assert await db_session.scalar(
+        select(func.count()).select_from(Agent).where(Agent.server_id == server.id)
+    ) == 0
+    classified = await client.patch(
+        f"/servers/{server.id}", headers=headers, json={"os_family": os_family}
+    )
+    assert classified.status_code == 200
+    response = await client.post(path, headers=headers, json=payload)
+    assert response.status_code == 201, response.text
+    assert response.json()["agent_type"] == agent_type
+    assert (await heartbeat(client, response.json()["token"])).status_code == 200
+
+
+async def test_unclassified_foreign_server_still_returns_404(client, db_session, owner, owner_factory):
+    _, server, _ = await owner_factory()
+    server.os_family = None
+    await db_session.flush()
+    response = await client.post(
+        f"/servers/{server.id}/agent", headers=owner[2], json={"agent_type": "DATABASE"}
+    )
+    assert response.status_code == 404
 
 
 async def test_get_owned_agent_without_exposing_token(client, owner, created_agent):
@@ -354,7 +389,7 @@ async def test_create_agent_requires_body(client, db_session, owner):
 
 async def test_agent_types_on_separate_servers_are_independent(client, db_session, owner):
     user, first_server, headers = owner
-    second_server = Server(customer_id=first_server.customer_id, name="Servidor banco")
+    second_server = Server(os_family="LINUX", customer_id=first_server.customer_id, name="Servidor banco")
     db_session.add(second_server)
     await db_session.flush()
     agents = []
@@ -655,7 +690,7 @@ async def committed_server(db_session):
         await session.flush()
         session.add(Customer(id=customer_id, user_id=user_id, name="Concorrência"))
         await session.flush()
-        session.add(Server(id=server_id, customer_id=customer_id, name="Concorrência"))
+        session.add(Server(os_family="LINUX", id=server_id, customer_id=customer_id, name="Concorrência"))
         await session.commit()
     try:
         yield engine, user_id, server_id

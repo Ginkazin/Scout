@@ -43,7 +43,7 @@ async def customer_factory(db_session):
 @pytest_asyncio.fixture
 async def server_factory(db_session):
     async def create(customer, **fields):
-        server = Server(customer_id=customer.id, **{"name": "Servidor ERP", **fields})
+        server = Server(customer_id=customer.id, **{"name": "Servidor ERP", "os_family": "LINUX", **fields})
         db_session.add(server)
         await db_session.flush()
         return server
@@ -72,7 +72,7 @@ async def count_servers(db_session, customer):
 
 @pytest.mark.parametrize("ip", ["192.0.2.10", "2001:db8::10"], ids=["ipv4", "ipv6"])
 async def test_create_server_persists_fields(client, db_session, owner, customer, ip):
-    payload = dict(name="Servidor ERP", server_type="DEDICATED", hostname="erp.example.com",
+    payload = dict(os_family="LINUX", name="Servidor ERP", server_type="DEDICATED", hostname="erp.example.com",
                    ip_address=ip, operating_system="Linux", description="Servidor principal")
     response = await client.post(collection(customer), headers=owner[1], json=payload)
     assert response.status_code == 201, response.text
@@ -87,8 +87,76 @@ async def test_create_server_persists_fields(client, db_session, owner, customer
         assert getattr(server, field) == value
 
 
+@pytest.mark.parametrize("os_family,description", [
+    ("LINUX", "Ubuntu 24.04"), ("WINDOWS", "Windows Server 2022"),
+])
+async def test_server_os_family_persists_separately_from_description(
+    client, db_session, owner, customer, os_family, description
+):
+    response = await client.post(
+        collection(customer), headers=owner[1],
+        json={"name": "Servidor SO", "os_family": os_family, "operating_system": description},
+    )
+    assert response.status_code == 201, response.text
+    server_id = UUID(response.json()["id"])
+    server = await db_session.get(Server, server_id)
+    assert server.os_family == os_family
+    assert server.operating_system == description
+    fetched = await client.get(f"/servers/{server_id}", headers=owner[1])
+    assert fetched.status_code == 200
+    assert fetched.json()["os_family"] == os_family
+    assert fetched.json()["operating_system"] == description
+    # Alterar a descrição não apaga ou redefine a família do SO.
+    patched = await client.patch(
+        f"/servers/{server_id}", headers=owner[1], json={"operating_system": None}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["os_family"] == os_family
+
+
+async def test_new_server_requires_os_family(client, db_session, owner, customer):
+    response = await client.post(collection(customer), headers=owner[1], json={"name": "Sem SO"})
+    assert response.status_code == 422
+    assert any(error["loc"] == ["body", "os_family"] for error in response.json()["detail"])
+    assert await count_servers(db_session, customer) == 0
+
+
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+@pytest.mark.parametrize("value", [None, "", "linux", "MACOS", "Ubuntu 24.04"])
+async def test_invalid_os_family_is_rejected(
+    client, db_session, owner, customer, server_factory, method, value
+):
+    server = await server_factory(customer)
+    path = collection(customer) if method == "POST" else f"/servers/{server.id}"
+    response = await client.request(
+        method, path, headers=owner[1], json={"name": "Novo nome", "os_family": value}
+    )
+    assert response.status_code == 422, response.text
+    await db_session.refresh(server)
+    assert server.os_family == "LINUX"
+    assert server.name == "Servidor ERP"
+    assert await count_servers(db_session, customer) == 1
+
+
+@pytest.mark.parametrize("os_family", ["WINDOWS", "LINUX"])
+async def test_legacy_server_can_be_read_and_classified(
+    client, db_session, owner, customer, server_factory, os_family
+):
+    server = await server_factory(customer, os_family=None, operating_system="Descrição legada")
+    fetched = await client.get(f"/servers/{server.id}", headers=owner[1])
+    assert fetched.status_code == 200
+    assert fetched.json()["os_family"] is None
+    response = await client.patch(
+        f"/servers/{server.id}", headers=owner[1], json={"os_family": os_family}
+    )
+    assert response.status_code == 200
+    await db_session.refresh(server)
+    assert server.os_family == os_family
+    assert server.operating_system == "Descrição legada"
+
+
 async def test_create_server_defaults(client, owner, customer):
-    response = await client.post(collection(customer), headers=owner[1], json={"name": "  ERP  "})
+    response = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "  ERP  "})
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["name"] == "ERP"
@@ -101,14 +169,14 @@ async def test_create_server_defaults(client, owner, customer):
 @pytest.mark.parametrize("server_type", list(ServerType))
 async def test_create_supported_server_types(client, owner, customer, server_type):
     response = await client.post(collection(customer), headers=owner[1],
-                                 json={"name": "Servidor", "server_type": server_type.value})
+                                 json={"os_family": "LINUX", "name": "Servidor", "server_type": server_type.value})
     assert response.status_code == 201, response.text
     assert response.json()["server_type"] == server_type.value
 
 
 async def test_duplicate_name_in_same_customer_rejected(client, db_session, owner, customer):
-    first = await client.post(collection(customer), headers=owner[1], json={"name": "ERP"})
-    duplicate = await client.post(collection(customer), headers=owner[1], json={"name": "ERP"})
+    first = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
+    duplicate = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
     assert first.status_code == 201
     assert duplicate.status_code == 409
     assert await count_servers(db_session, customer) == 1
@@ -117,7 +185,7 @@ async def test_duplicate_name_in_same_customer_rejected(client, db_session, owne
 async def test_same_name_allowed_in_different_customers(client, owner, customer, customer_factory):
     other_customer = await customer_factory(owner[0])
     for target in (customer, other_customer):
-        response = await client.post(collection(target), headers=owner[1], json={"name": "ERP"})
+        response = await client.post(collection(target), headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
         assert response.status_code == 201, response.text
 
 
@@ -128,7 +196,7 @@ async def test_cannot_create_in_unowned_customer(
     other, _ = await owner_factory()
     target = await customer_factory(other)
     target_id = target.id if foreign else uuid4()
-    response = await client.post(f"/customers/{target_id}/servers", headers=owner[1], json={"name": "ERP"})
+    response = await client.post(f"/customers/{target_id}/servers", headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
     assert response.status_code == 404, response.text
     assert await count_servers(db_session, target) == 0
 
@@ -140,9 +208,9 @@ async def test_server_limit_is_global_across_customers(
     await db_session.flush()
     other = await customer_factory(owner[0])
     for target in (customer, other):
-        response = await client.post(collection(target), headers=owner[1], json={"name": "ERP"})
+        response = await client.post(collection(target), headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
         assert response.status_code == 201, response.text
-    blocked = await client.post(collection(other), headers=owner[1], json={"name": "Novo servidor"})
+    blocked = await client.post(collection(other), headers=owner[1], json={"os_family": "LINUX", "name": "Novo servidor"})
     assert blocked.status_code == 403, blocked.text
     assert await count_servers(db_session, customer) == 1
     assert await count_servers(db_session, other) == 1
@@ -155,7 +223,7 @@ async def test_other_users_servers_do_not_consume_limit(
     other, _ = await owner_factory()
     other_customer = await customer_factory(other)
     await server_factory(other_customer)
-    response = await client.post(collection(customer), headers=owner[1], json={"name": "ERP"})
+    response = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
     assert response.status_code == 201, response.text
 
 
@@ -164,7 +232,7 @@ async def test_inactive_server_still_counts_toward_limit(
 ):
     free_plan.max_servers = 1
     await server_factory(customer, is_active=False)
-    response = await client.post(collection(customer), headers=owner[1], json={"name": "Novo servidor"})
+    response = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "Novo servidor"})
     assert response.status_code == 403, response.text
 
 
@@ -178,7 +246,7 @@ async def test_subscription_status_controls_creation(
 ):
     user, headers = await owner_factory(status)
     target = await customer_factory(user)
-    response = await client.post(collection(target), headers=headers, json={"name": "ERP"})
+    response = await client.post(collection(target), headers=headers, json={"os_family": "LINUX", "name": "ERP"})
     assert response.status_code == expected, response.text
     assert await count_servers(db_session, target) == (1 if expected == 201 else 0)
 
@@ -291,7 +359,7 @@ async def test_patch_empty_or_same_name(client, owner, customer, server_factory,
 async def test_patch_duplicate_name_rejected(client, db_session, owner, customer, server_factory):
     await server_factory(customer, name="ERP")
     server = await server_factory(customer, name="Banco")
-    response = await client.patch(f"/servers/{server.id}", headers=owner[1], json={"name": "ERP"})
+    response = await client.patch(f"/servers/{server.id}", headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
     assert response.status_code == 409
     await db_session.refresh(server)
     assert server.name == "Banco"
@@ -303,12 +371,12 @@ async def test_patch_name_used_in_other_customer_allowed(
     sibling = await customer_factory(owner[0])
     await server_factory(sibling, name="ERP")
     server = await server_factory(customer)
-    response = await client.patch(f"/servers/{server.id}", headers=owner[1], json={"name": "ERP"})
+    response = await client.patch(f"/servers/{server.id}", headers=owner[1], json={"os_family": "LINUX", "name": "ERP"})
     assert response.status_code == 200
     assert response.json()["name"] == "ERP"
 
 
-@pytest.mark.parametrize("field", ["name", "server_type", "is_active"])
+@pytest.mark.parametrize("field", ["name", "server_type", "is_active", "os_family"])
 async def test_patch_rejects_null_required_fields(client, db_session, owner, customer, server_factory, field):
     server = await server_factory(customer)
     response = await client.patch(f"/servers/{server.id}", headers=owner[1], json={field: None})
@@ -330,7 +398,7 @@ async def test_invalid_payload_does_not_mutate(
 ):
     server = await server_factory(customer)
     path = collection(customer) if method == "POST" else f"/servers/{server.id}"
-    response = await client.request(method, path, headers=owner[1], json={"name": "Novo servidor", **invalid})
+    response = await client.request(method, path, headers=owner[1], json={"os_family": "LINUX", "name": "Novo servidor", **invalid})
     assert response.status_code == 422, response.text
     await db_session.refresh(server)
     assert server.name == "Servidor ERP"
@@ -347,7 +415,7 @@ async def test_delete_frees_plan_slot(client, db_session, free_plan, owner, cust
     assert await count_servers(db_session, customer) == 0
     missing = await client.get(f"/servers/{server.id}", headers=owner[1])
     assert missing.status_code == 404
-    replacement = await client.post(collection(customer), headers=owner[1], json={"name": "Substituto"})
+    replacement = await client.post(collection(customer), headers=owner[1], json={"os_family": "LINUX", "name": "Substituto"})
     assert replacement.status_code == 201, replacement.text
 
 

@@ -37,11 +37,7 @@ class CustomerService:
             )
 
     # Método para criar um novo cliente.
-    async def create(
-            self,
-            data: CustomerCreate,
-            current_user: User,
-    ) -> Customer:
+    async def create(self,data: CustomerCreate,current_user: User,) -> Customer:
         existing_customer = await self.customer_repository.get_by_name_and_user_id(
             name=data.name,
             user_id=current_user.id,
@@ -67,11 +63,7 @@ class CustomerService:
             raise ConflictError("Já existe um cliente com esse nome") from exc
 
     # Método para obter um cliente pelo ID e pelo usuário atual.
-    async def get_by_id(
-            self,
-            customer_id: UUID,
-            current_user: User,
-    ) -> Customer:
+    async def get_by_id(self,customer_id: UUID,current_user: User,) -> Customer:
         customer = await self.customer_repository.get_by_id_and_user_id(
             customer_id=customer_id,
             user_id=current_user.id,
@@ -83,12 +75,7 @@ class CustomerService:
         return customer
 
     # Método para listar clientes do usuário atual com paginação.
-    async def list(
-            self,
-            current_user:User,
-            skip:int = 0,
-            limit:int = 100,
-    ) -> list[Customer]:
+    async def list(self,current_user:User,skip:int = 0,limit:int = 100,) -> list[Customer]:
         return await self.customer_repository.list_by_user_id(
             user_id=current_user.id,
             skip=skip,
@@ -96,12 +83,7 @@ class CustomerService:
         )
 
     # Método para atualizar um cliente existente.
-    async def update(
-            self,
-            customer_id:UUID,
-            data:CustomerUpdate,
-            current_user:User,
-    ) -> Customer:
+    async def update(self,customer_id:UUID,data:CustomerUpdate,current_user:User,) -> Customer:
         customer = await self.get_by_id(
             customer_id=customer_id,
             current_user=current_user
@@ -130,11 +112,7 @@ class CustomerService:
             raise ConflictError("Já existe um cliente com esse nome") from exc
 
     # Método para deletar um cliente existente.
-    async def delete(
-            self,
-            customer_id:UUID,
-            current_user: User,
-    ) -> None:
+    async def delete(self,customer_id:UUID,current_user: User,) -> None:
         customer = await self.get_by_id(
             customer_id=customer_id,
             current_user=current_user,

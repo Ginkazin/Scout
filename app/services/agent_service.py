@@ -21,12 +21,7 @@ class AgentService:
         self.server_repository = server_repository
 
     # Método para criar um novo agente associado a um servidor.
-    async def create(
-        self,
-        server_id: UUID,
-        current_user: User,
-        data:AgentCreate,
-    ) -> tuple[Agent, str]:
+    async def create(self,server_id: UUID,current_user: User,data:AgentCreate,) -> tuple[Agent, str]:
         # Confirma que o servidor pertence ao usuário.
         server = await self.server_repository.get_by_id_and_user_id(
             server_id=server_id,
@@ -35,7 +30,7 @@ class AgentService:
 
         if server is None:
             raise NotFoundError("Servidor não encontrado")
-        if data.os_family is None:
+        if server.os_family is None:
             raise ConflictError("Defina Windows ou Linux no cadastro do servidor " "antes de criar o agente.")
 
         # Cada servidor pode possuir apenas um Agent.
@@ -70,11 +65,7 @@ class AgentService:
         return agent, token
 
     # Método para obter um agente pelo ID, garantindo que ele pertença ao usuário atual.
-    async def get_by_id(
-        self,
-        agent_id: UUID,
-        current_user: User,
-    ) -> Agent:
+    async def get_by_id(self,agent_id: UUID,current_user: User,) -> Agent:
         agent = await self.agent_repository.get_by_id_and_user_id(
             agent_id=agent_id,
             user_id=current_user.id,
@@ -86,11 +77,7 @@ class AgentService:
         return agent
 
     # Método para desativar um agente.
-    async def disable(
-        self,
-        agent_id: UUID,
-        current_user: User,
-    ) -> Agent:
+    async def disable(self,agent_id: UUID,current_user: User,) -> Agent:
         agent = await self.get_by_id(agent_id, current_user)
 
         if agent.status == AgentStatus.DISABLED:
@@ -100,11 +87,7 @@ class AgentService:
         return await self.agent_repository.update(agent)
 
     # Método para habilitar um agente que estava desativado, alterando seu status para PENDING.
-    async def enable(
-        self,
-        agent_id: UUID,
-        current_user: User,
-    ) -> Agent:
+    async def enable(self,agent_id: UUID,current_user: User,) -> Agent:
         agent = await self.get_by_id(agent_id, current_user)
 
         if agent.status != AgentStatus.DISABLED:
@@ -114,10 +97,7 @@ class AgentService:
         return await self.agent_repository.update(agent)
 
     # Método para autenticar um agente usando seu token.
-    async def authenticate(
-        self,
-        token: str,
-    ) -> Agent:
+    async def authenticate(self,token: str,) -> Agent:
         error_message = "Token de agente inválido"
 
         try:
@@ -139,11 +119,7 @@ class AgentService:
         return agent
 
     # Método para registrar o heartbeat de um agente, atualizando seu status e versão.
-    async def heartbeat(
-        self,
-        token: str,
-        data: AgentHeartbeat,
-    ) -> Agent:
+    async def heartbeat(self,token: str,data: AgentHeartbeat,) -> Agent:
         agent = await self.authenticate(token)
 
         updated_agent = await self.agent_repository.record_heartbeat(
@@ -158,11 +134,7 @@ class AgentService:
         return updated_agent
 
     # Método para deletar um agente, garantindo que ele pertença ao usuário atual.
-    async def delete(
-        self,
-        agent_id: UUID,
-        current_user: User,
-    ) -> None:
+    async def delete(self,agent_id: UUID,current_user: User,) -> None:
         agent = await self.get_by_id(agent_id=agent_id, current_user=current_user) 
 
         await self.agent_repository.delete(agent)
