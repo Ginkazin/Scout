@@ -23,7 +23,7 @@ from app.services.agent_service import AgentService
 
 router = APIRouter(tags=["agents"])
 
-
+# Rota para criar um novo agente associado a um servidor, garantindo que o servidor pertença ao usuário atual.
 @router.post(
     "/servers/{server_id}/agent",
     response_model=AgentCreateResponse,
@@ -60,7 +60,7 @@ async def create_agent(
         token=token,
     )
 
-
+# Rota para obter informações de um agente específico, garantindo que ele pertença ao usuário atual.
 @router.get(
     "/agents/{agent_id}",
     response_model=AgentResponse,
@@ -81,7 +81,7 @@ async def get_agent(
             detail=str(exc),
         ) from exc
 
-
+# Rota para habilitar um agente que estava desativado, alterando seu status para PENDING.
 @router.post(
     "/agents/{agent_id}/disable",
     response_model=AgentResponse,
@@ -102,7 +102,7 @@ async def disable_agent(
             detail=str(exc),
         ) from exc
 
-
+# Rota para habilitar um agente que estava desativado, alterando seu status para PENDING.
 @router.post(
     "/agents/{agent_id}/enable",
     response_model=AgentResponse,
@@ -128,7 +128,7 @@ async def enable_agent(
             detail=str(exc),
         ) from exc
 
-
+# Rota para o heartbeat do agente, que atualiza o status do agente no sistema.  
 @router.post(
     "/agent/heartbeat",
     response_model=AgentResponse,
@@ -150,6 +150,7 @@ async def agent_heartbeat(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
+# Rota para deletar um agente, garantindo que ele pertença ao usuário atual.
 @router.delete(
     "/agents/{agent_id}",
     status_code=status.HTTP_204_NO_CONTENT,

@@ -153,11 +153,12 @@ class AgentService:
 
         return updated_agent
 
+    # Método para deletar um agente, garantindo que ele pertença ao usuário atual.
     async def delete(
         self,
         agent_id: UUID,
         current_user: User,
     ) -> None:
-        agent = await self.get_by_id(agent_id=agent_id, current_user=current_user)
+        agent = await self.get_by_id(agent_id=agent_id, current_user=current_user) 
 
         await self.agent_repository.delete(agent)
