@@ -7,3 +7,4 @@ from app.models.server import Server
 from app.models.agent import Agent
 from app.models.metric import Metric
 from app.models.alert import Alert
+from app.models.agent_installation import AgentInstallation

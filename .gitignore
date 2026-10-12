@@ -21,3 +21,8 @@ Thumbs.db
 
 # Configuração local e credenciais do Scout Agent
 /agent/local/
+
+# Arquivos gerados no empacotamento
+/build/
+/dist/
+/ScoutAgent.spec
