@@ -16,6 +16,7 @@ from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.server_service import ServerService
 from app.repositories.agent_repository import AgentRepository
+from app.repositories.agent_installation_repository import AgentInstallationRepository
 from app.services.agent_service import AgentService
 
 bearer_scheme = HTTPBearer()
@@ -115,4 +116,5 @@ def get_agent_service(db: AsyncSession = Depends(get_db, scope="function")) -> A
     return AgentService(
         agent_repository=AgentRepository(db),
         server_repository=ServerRepository(db),
+        installation_repository=AgentInstallationRepository(db),
     )

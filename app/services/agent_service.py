@@ -1,24 +1,28 @@
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
-
+from app.core.agent_installation_security import generate_installation_code, hash_installation_code
+from app.repositories.agent_installation_repository import AgentInstallationRepository
 from app.core.agent_security import generate_agent_token, parse_agent_token, verify_agent_secret
 from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.models.agent import Agent, AgentStatus
 from app.models.user import User
 from app.repositories.agent_repository import AgentRepository
 from app.repositories.server_repository import ServerRepository
-from app.schemas.agent_schema import AgentHeartbeat, AgentCreate, AgentRuntimeConfig
+from app.schemas.agent_schema import AgentHeartbeat, AgentCreate, AgentRuntimeConfig, AgentActivationRequest, AgentActivationResponse, AgentInstallationCodeResponse
 
+INSTALATION_CODE_TTL_SECONDS = 30 * 60  # 30 minutos em segundos
 
 class AgentService:
     def __init__(
         self,
         agent_repository: AgentRepository,
         server_repository: ServerRepository,
+        installation_repository: AgentInstallationRepository
     ):
         self.agent_repository = agent_repository
         self.server_repository = server_repository
+        self.installation_repository = installation_repository
 
     # Método para criar um novo agente associado a um servidor.
     async def create(self,server_id: UUID,current_user: User,data:AgentCreate,) -> tuple[Agent, str]:
@@ -31,7 +35,7 @@ class AgentService:
         if server is None:
             raise NotFoundError("Servidor não encontrado")
         if server.os_family is None:
-            raise ConflictError("Defina Windows ou Linux no cadastro do servidor " "antes de criar o agente.")
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor.")
 
         # Cada servidor pode possuir apenas um Agent.
         existing_agent = await self.agent_repository.get_by_server_id(
@@ -148,11 +152,90 @@ class AgentService:
         if server is None:
             raise UnauthorizedError("Credenciais de agente inválidas")
         if server.os_family is None:
-            raise ConflictError("Defina Windows ou Linux no cadastro do servidor " "antes de criar o agente.")
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor.")
 
         return AgentRuntimeConfig(
             agent_id=agent.id,
             server_id=server.id,
             agent_type=agent.agent_type,
             server_os_family=server.os_family,
+        )
+
+    async def issue_installation_code(self, agent_id: UUID, current_user: User) -> AgentInstallationCodeResponse:
+        agent = await self.get_by_id(agent_id,current_user)
+
+        agent = await self.agent_repository.get_by_id_for_update(agent_id)
+
+        if agent is None:
+            raise NotFoundError("Agente não encontrado")
+
+        if agent.status != AgentStatus.DISABLED:
+            raise ConflictError("Habilite o agente antes de emitir um código de instalação.")
+
+        server = await self.server_repository.get_by_id_and_user_id(server_id=agent.server_id, user_id=current_user.id)
+
+        if server is None:
+            raise NotFoundError("Servidor não encontrado")
+
+        if server.os_family is None:
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor.")
+
+        code, code_hash = generate_installation_code()
+
+        installation = await self.installation_repository.replace_code(agent_id=agent.id, code_hash=code_hash, expires_in_seconds=INSTALATION_CODE_TTL_SECONDS)
+
+        return AgentInstallationCodeResponse(
+            agent_id=agent.id,
+            installation_code=code,
+            expires_at=INSTALATION_CODE_TTL_SECONDS,
+        )
+
+    async def activate(self, data: AgentActivationRequest) -> AgentActivationResponse:
+        error_message = "Código de instalação inválido ou expirado"
+
+        try:
+            code_hash = hash_installation_code(data.installation_code.get_secret_value())
+        except ValueError:
+            raise UnauthorizedError(error_message) from None
+
+        agent_id = (await self.installation_repository.get_agent_id_by_code_hash(code_hash))
+
+        if agent_id is None:
+            raise UnauthorizedError(error_message)
+
+        agent = await self.agent_repository.get_by_id_for_update(agent_id)
+
+        if agent is None or agent.status != AgentStatus.DISABLED:
+            raise UnauthorizedError(error_message)
+
+        server = await self.server_repository.get_by_id(agent.server_id)
+
+        if server is None:
+            raise UnauthorizedError(error_message)
+
+        consumed = await self.installation_repository.consume_code(agent_id=agent.id, code_hash=code_hash)
+
+        if not consumed:
+            raise UnauthorizedError(error_message)
+
+        if server.os_family is None:
+            raise ConflictError("Defina Windows ou Linux no cadastro do servidor.")
+
+        if server.os_family != data.os_family:
+            raise ConflictError("O código de instalação não é compatível com o sistema operacional do servidor.")
+
+        token, token_hash = generate_agent_token(agent.id)
+
+        agent.token_hash = token_hash
+        agent.status = AgentStatus.PENDING
+        agent.last_seen_at = None
+
+        agent = await self.agent_repository.update(agent)
+
+        return AgentActivationResponse(
+            agent_id=agent.id,
+            server_id=server.id,
+            agent_type=agent.agent_type,
+            server_os_family=server.os_family,
+            token=token,
         )

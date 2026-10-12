@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from pydantic import Field
+from pydantic import Field, SecretStr
 from app.models.server import ServerOSFamily
 from app.models.agent import AgentStatus, AgentType
 from app.schemas.base_schema import BaseSchema, BaseResponseSchema
@@ -30,8 +30,24 @@ class AgentHeartbeat(BaseSchema):
 class AgentCreateResponse(AgentResponse):
     token: str
 
+# class AgentUpdateResponse é uma classe para representar a resposta de atualização de um agente, herdando os campos da classe AgentResponse.
 class AgentRuntimeConfig(BaseSchema):
     agent_id: uuid.UUID
     server_id: uuid.UUID
     agent_type: AgentType
     server_os_family: ServerOSFamily
+
+# class usada para representar a resposta de criação de um código de instalação de agente, incluindo o ID do agente, o código de instalação e a data de expiração.
+class AgentInstallationCodeResponse(BaseSchema):
+    agent_id: uuid.UUID
+    installation_code: str
+    expires_at: datetime
+
+# class usada para representar a solicitação de ativação de um agente, incluindo o código de instalação e a família do sistema operacional do servidor.
+class AgentActivationRequest(BaseSchema):
+    installation_code: SecretStr
+    os_family: ServerOSFamily
+
+# class usada para representar a resposta de ativação de um agente, herdando os campos da classe AgentRuntimeConfig e adicionando o campo token.
+class AgentActivationResponse(AgentRuntimeConfig):
+    token: str

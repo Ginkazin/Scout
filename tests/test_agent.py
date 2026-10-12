@@ -25,6 +25,7 @@ from app.models.metric import Metric
 from app.models.server import Server
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
+from app.repositories.agent_installation_repository import AgentInstallationRepository
 from app.repositories.agent_repository import AgentRepository
 import app.repositories.agent_repository as agent_repository_module
 from app.repositories.server_repository import ServerRepository
@@ -720,7 +721,11 @@ async def test_concurrent_creation_allows_only_one_agent(committed_server):
 
     async def create():
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            service = AgentService(BarrierRepository(session), ServerRepository(session))
+            service = AgentService(
+                agent_repository=BarrierRepository(session),
+                server_repository=ServerRepository(session),
+                installation_repository=AgentInstallationRepository(session),
+            )
             user = await session.get(User, user_id)
             try:
                 agent, token = await service.create(server_id, user, AgentCreate(agent_type="INFRASTRUCTURE"))
@@ -759,7 +764,11 @@ async def test_heartbeat_rechecks_database_after_authentication(committed_server
 
     async def send_heartbeat():
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            service = AgentService(PausedRepository(session), ServerRepository(session))
+            service = AgentService(
+                agent_repository=PausedRepository(session),
+                server_repository=ServerRepository(session),
+                installation_repository=AgentInstallationRepository(session),
+            )
             with pytest.raises(UnauthorizedError):
                 await service.heartbeat(token, AgentHeartbeat(version="9.0.0"))
             await session.rollback()
@@ -769,10 +778,18 @@ async def test_heartbeat_rechecks_database_after_authentication(committed_server
         await asyncio.wait_for(authenticated.wait(), timeout=10)
         async with AsyncSession(engine, expire_on_commit=False) as session:
             if change == "disable":
-                service = AgentService(AgentRepository(session), ServerRepository(session))
+                service = AgentService(
+                    agent_repository=AgentRepository(session),
+                    server_repository=ServerRepository(session),
+                    installation_repository=AgentInstallationRepository(session),
+                )
                 await service.disable(agent_id, await session.get(User, user_id))
             elif change == "delete":
-                service = AgentService(AgentRepository(session), ServerRepository(session))
+                service = AgentService(
+                    agent_repository=AgentRepository(session),
+                    server_repository=ServerRepository(session),
+                    installation_repository=AgentInstallationRepository(session),
+                )
                 await service.delete(agent_id, await session.get(User, user_id))
             else:
                 await session.execute(update(Agent).where(Agent.id == agent_id)

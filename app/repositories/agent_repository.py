@@ -1,3 +1,4 @@
+from unittest import result
 from uuid import UUID
 from datetime import timedelta
 from sqlalchemy import select, func, update
@@ -93,5 +94,19 @@ class AgentRepository(BaseRepository[Agent]):
             )
         )
 
+        result = await self.db.execute(statement)
+        return result.scalar_one_or_none()
+
+    async def get_by_id_for_update(
+        self,
+        agent_id: UUID,
+    ) -> Agent | None:
+        statement = (
+            select(Agent)
+            .where(Agent.id == agent_id)
+            .with_for_update(of=Agent)
+            .execution_options(populate_existing=True)
+        )
+        
         result = await self.db.execute(statement)
         return result.scalar_one_or_none()
