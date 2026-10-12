@@ -2,24 +2,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from app.api.dependencies import (
-    get_agent_service,
-    get_agent_token,
-    get_current_user,
-)
-from app.core.exceptions import (
-    ConflictError,
-    NotFoundError,
-    UnauthorizedError,
-)
+from app.api.dependencies import get_agent_service, get_agent_token, get_current_user
+from app.core.exceptions import ConflictError,NotFoundError,UnauthorizedError
 from app.models.user import User
-from app.schemas.agent_schema import (
-    AgentCreateResponse,
-    AgentHeartbeat,
-    AgentResponse,
-    AgentCreate,
-    AgentRuntimeConfig
-)
+from app.schemas.agent_schema import AgentCreateResponse, AgentHeartbeat, AgentResponse, AgentCreate, AgentRuntimeConfig, AgentActivationRequest, AgentActivationResponse, AgentInstallationCodeResponse
 from app.services.agent_service import AgentService
 
 
@@ -39,11 +25,7 @@ async def create_agent(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        agent, token = await service.create(
-            server_id=server_id,
-            current_user=current_user,
-            data=data,
-        )
+        agent, token = await service.create(server_id=server_id,current_user=current_user,data=data,)
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -75,10 +57,7 @@ async def get_agent(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        return await service.get_by_id(
-            agent_id=agent_id,
-            current_user=current_user,
-        )
+        return await service.get_by_id(agent_id=agent_id,current_user=current_user,)
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -96,10 +75,7 @@ async def disable_agent(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        return await service.disable(
-            agent_id=agent_id,
-            current_user=current_user,
-        )
+        return await service.disable(agent_id=agent_id,current_user=current_user,)
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -117,10 +93,7 @@ async def enable_agent(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        return await service.enable(
-            agent_id=agent_id,
-            current_user=current_user,
-        )
+        return await service.enable(agent_id=agent_id,current_user=current_user,)
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -143,10 +116,7 @@ async def agent_heartbeat(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        return await service.heartbeat(
-            token=token,
-            data=data,
-        )
+        return await service.heartbeat(token=token,data=data,)
     except UnauthorizedError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -165,10 +135,7 @@ async def delete_agent(
     service: AgentService = Depends(get_agent_service),
 ):
     try:
-        await service.delete(
-            agent_id=agent_id,
-            current_user=current_user,
-        )
+        await service.delete(agent_id=agent_id,current_user=current_user,)
     except NotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -198,4 +165,61 @@ async def get_agent_config(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
+        ) from exc
+
+@router.post(
+    "/agents/{agent_id}/installation-code",
+    response_model=AgentInstallationCodeResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def issue_installation_code(
+    agent_id: UUID,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    service: AgentService = Depends(get_agent_service),
+):
+
+    response.headers["Cache-Control"] = "no-store"
+
+    try:
+        return await service.issue_installation_code(agent_id=agent_id,current_user=current_user,)
+    except NotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            headers={"Cache-Control": "no-store"},
+        ) from exc
+    except ConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+            headers={"Cache-Control": "no-store"},
+        ) from exc
+
+@router.post(
+    "/agent/activate",
+    response_model=AgentActivationResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def activate_agent(
+    data: AgentActivationRequest,
+    response: Response,
+    service: AgentService = Depends(get_agent_service),
+):
+
+    response.headers["Cache-Control"] = "no-store"
+
+    try:
+        return await service.activate(data)
+    except UnauthorizedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    except ConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+            headers={"Cache-Control": "no-store"},
         ) from exc

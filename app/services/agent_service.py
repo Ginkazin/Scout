@@ -161,6 +161,7 @@ class AgentService:
             server_os_family=server.os_family,
         )
 
+    # Método para emitir um código de instalação para um agente, garantindo que ele pertença ao usuário atual e que o servidor associado tenha o sistema operacional definido.
     async def issue_installation_code(self, agent_id: UUID, current_user: User) -> AgentInstallationCodeResponse:
         agent = await self.get_by_id(agent_id,current_user)
 
@@ -169,7 +170,7 @@ class AgentService:
         if agent is None:
             raise NotFoundError("Agente não encontrado")
 
-        if agent.status != AgentStatus.DISABLED:
+        if agent.status == AgentStatus.DISABLED:
             raise ConflictError("Habilite o agente antes de emitir um código de instalação.")
 
         server = await self.server_repository.get_by_id_and_user_id(server_id=agent.server_id, user_id=current_user.id)
@@ -187,9 +188,10 @@ class AgentService:
         return AgentInstallationCodeResponse(
             agent_id=agent.id,
             installation_code=code,
-            expires_at=INSTALATION_CODE_TTL_SECONDS,
+            expires_at=installation.expires_at,
         )
 
+    # Método para ativar um agente usando um código de instalação, garantindo que o código seja válido e compatível com o sistema operacional do servidor.
     async def activate(self, data: AgentActivationRequest) -> AgentActivationResponse:
         error_message = "Código de instalação inválido ou expirado"
 
@@ -205,7 +207,7 @@ class AgentService:
 
         agent = await self.agent_repository.get_by_id_for_update(agent_id)
 
-        if agent is None or agent.status != AgentStatus.DISABLED:
+        if agent is None or agent.status == AgentStatus.DISABLED:
             raise UnauthorizedError(error_message)
 
         server = await self.server_repository.get_by_id(agent.server_id)
